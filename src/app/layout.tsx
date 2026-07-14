@@ -17,7 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <header className="site-header">
           <div className="header-inner">
-            <Link className="brand" href="/">
+            <Link className="brand" href="/sessions">
               <span className="brand-mark">TC</span>
               <span>Talk Craft</span>
             </Link>
