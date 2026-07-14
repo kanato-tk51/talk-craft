@@ -16,10 +16,10 @@ Status: Accepted for MVP / 2026-07-14
 | `is_exact_transcript: false` の意味 | `exact / paraphrased / inferred / unknown` の精度区分を正規形とし、旧 boolean は互換入力として受ける。 |
 | 「AI生成」と「ユーザー修正」の区別 | 各取込由来レコードに `origin_type`、`source_import_id`、`user_edited_at` を持たせ、原文は `import_records.raw_content` に不変で保存する。 |
 | 表現ライブラリの編集と過去履歴 | `session_expressions` に英語・意味のスナップショットを保存する。ライブラリの後日編集で過去プロンプトを変えない。 |
+| セッション作成時の入力範囲 | 最初の画面はタイトル、テーマ、任意の目的に絞る。学習表現は独立した `expressions` として保存し、`session_expressions` で任意に関連付ける。開始プロンプトには表現を含めない。 |
 | プロンプト更新と再現性 | バージョン付きテンプレートをコードから読み、生成結果と入力スナップショットを `generated_prompts` に保存する。 |
 | 再インポート時の重複 | MVPでは1セッションにつき確定済みAIインポートを1つとする。再取込はプレビュー後に「AI由来データを置換」し、手動作成データは保持する。 |
 | 削除方式 | セッションは確認付きの物理削除。ユーザー削除は関連学習データを cascade する。監査・復元が必要になった段階で猶予付き削除を追加する。 |
-| 日時と予定日 | DBは `timestamptz` のUTC、表示・入力はユーザータイムゾーン。予定だけの場合も同じ型を用いる。 |
 
 ### 技術的リスク
 
@@ -37,7 +37,7 @@ Status: Accepted for MVP / 2026-07-14
 
 MVPは次の5つの利用可能な縦切りに分ける。
 
-1. 準備: セッション作成、使用AIの任意指定、表現登録、開始／終了プロンプト生成とコピー。
+1. 準備: タイトル・テーマ・任意の目的によるセッション作成、独立した表現ライブラリとセッション関連付け、開始／終了プロンプト生成とコピー。
 2. 実践の記録: 開始・終了時刻、外部会話URL、利用モデル、会話方式の保存。
 3. 安全な取込: JSON貼付け／ファイル、原文保存、抽出、検証、プレビュー、修正、確定。
 4. 復習: 要約、会話、修正、聞き取り、言えなかった内容、自己メモの閲覧・編集。
@@ -86,6 +86,7 @@ src/
   app/                         # ルーティングと画面。薄く保つ
     api/                       # 外部境界が必要なRoute Handlers
     sessions/
+    expressions/
   components/                  # 複数画面で共有するUI
   modules/
     sessions/
@@ -124,7 +125,7 @@ docs/
 | `users` | 認証ユーザーと学習設定。`english_level`、言語、タイムゾーンを保持。 |
 | `auth_accounts`, `auth_sessions`, `auth_verifications` | Better Authの認証用。学習セッションと命名を分ける。 |
 | `ai_providers` | ユーザー定義の外部AIサービス。能力フラグは nullable（不明を表現）。 |
-| `sessions` | 学習サイクルの集約ルート。プロバイダー参照は nullable、表示名とURLはsnapshot。 |
+| `sessions` | 学習サイクルの集約ルート。作成時の中心項目はタイトル、テーマ、任意の目的。既存の条件列は後方互換のため残すが、初期画面では使用しない。 |
 | `expressions` | ユーザーの再利用可能な表現ライブラリ。配列項目はJSONBで構造化する。 |
 | `session_expressions` | セッションと表現の関連、使用予定・結果・引継ぎ、当時の表現snapshot。 |
 | `prompt_templates` | 将来の管理画面／プロバイダー別override用。MVPの標準テンプレートはコード管理。 |
@@ -156,8 +157,8 @@ erDiagram
   USERS ||--o{ AUTH_ACCOUNTS : authenticates
   USERS ||--o{ AUTH_SESSIONS : has
   AI_PROVIDERS o|--o{ SESSIONS : selected_for
-  SESSIONS ||--o{ SESSION_EXPRESSIONS : prepares
-  EXPRESSIONS ||--o{ SESSION_EXPRESSIONS : reused_as
+  SESSIONS ||--o{ SESSION_EXPRESSIONS : relates
+  EXPRESSIONS ||--o{ SESSION_EXPRESSIONS : linked_as
   SESSIONS ||--o{ GENERATED_PROMPTS : snapshots
   SESSIONS ||--o{ IMPORT_RECORDS : stages
   SESSIONS ||--o| SESSION_REVIEWS : has
@@ -182,7 +183,9 @@ erDiagram
 | GET/POST | `/api/v1/sessions` | 一覧／作成 |
 | GET/PATCH/DELETE | `/api/v1/sessions/{sessionId}` | 詳細／更新／削除 |
 | POST | `/api/v1/sessions/{sessionId}/transitions` | 状態遷移。任意のstatus上書きを避ける |
-| POST | `/api/v1/sessions/{sessionId}/expressions` | 表現を作成または既存表現を関連付け |
+| GET/POST | `/api/v1/expressions` | 独立した表現ライブラリの一覧／作成 |
+| GET/PATCH/DELETE | `/api/v1/expressions/{expressionId}` | 表現の取得／編集／アーカイブ |
+| POST/DELETE | `/api/v1/sessions/{sessionId}/expressions/{expressionId}` | セッションとの関連付け／解除 |
 | GET/POST | `/api/v1/providers` | プロバイダー一覧／追加 |
 | POST | `/api/v1/sessions/{sessionId}/prompts/{type}/generations` | prompt snapshot生成 |
 | POST | `/api/v1/sessions/{sessionId}/imports` | pasteまたはmultipart uploadをstaging |
@@ -196,9 +199,8 @@ erDiagram
 
 ```mermaid
 flowchart TD
-  SignIn[サインイン] --> Home[ホーム]
-  Home --> Sessions[セッション一覧]
-  Home --> Library[表現ライブラリ]
+  SignIn[サインイン] --> Sessions[セッション一覧]
+  Sessions --> Library[表現ライブラリ]
   Sessions --> New[セッション作成]
   New --> Prep[予習・プロンプト]
   Sessions --> Prep
@@ -209,8 +211,8 @@ flowchart TD
   Preview -->|確定| Review[復習]
   Review --> Carry[次回へ引き継ぐ]
   Carry --> New
-  Home --> Providers[AIサービス設定]
-  Home --> Settings[設定・export・削除]
+  Sessions --> Providers[AIサービス設定]
+  Sessions --> Settings[設定・export・削除]
 ```
 
 画面は `/sessions/[id]` 内を「準備・実践・取込・復習」のタブまたはステップとしてまとめ、画面往復を減らす。スマートフォンでは下部の主要actionをstickyにする。
@@ -221,8 +223,8 @@ flowchart TD
 | --- | --- |
 | ホーム | 次の予定、未復習セッション、引継ぎ表現、最近の学び |
 | セッション一覧 | status filter、日付、provider snapshot、方式、検索、作成ボタン |
-| 作成・編集 | 基本情報フォーム、AIサービスcombobox＋自由入力、表現quick add、入力エラーsummary |
-| 予習 | GoalCard、PreparedExpressionList、PromptPanel、CopyButton、外部リンク警告 |
+| 作成・編集 | タイトル、テーマ、任意の目的、1件ずつ追加する独立表現フォーム、入力エラーsummary |
+| 予習 | GoalCard、TalkingPointList、LinkedExpressionList、PromptPanel、CopyButton、外部リンク警告 |
 | 実践 | Theme/Goal sticky card、表現チェック、開始/終了ボタン、外部URLメモ |
 | 取込 | PasteArea、FileDropzone、サイズ表示、ValidationIssueList、Raw/Parsed切替 |
 | プレビュー | completeness banner、差分・警告、各項目編集、確定／破棄 |
@@ -255,6 +257,7 @@ MVPは `GenericManualAdapter` のみを持ち、copy/paste、任意URL、汎用J
 - template key、semantic version、対応schema versionを明示する。
 - rendererへ渡す入力は型付きDTOとし、UI文字列連結を禁止する。
 - 生成時にtemplate key/version、入力snapshot、rendered contentを保存する。
+- 会話開始用templateへはテーマと任意の目的だけを渡し、独立した学習表現は含めない。関連表現は振り返り時の使用状況確認にだけ利用できる。
 - user/provider別overrideが必要になったら `prompt_templates` に追加し、標準templateをfallbackにする。
 - template変更は既存snapshotを変更しない。再生成はrevisionを増やし、ユーザーがどれを利用したか記録する。
 - 外部AIへのprompt injectionを完全には防げないため、ユーザー入力を区切り付きdataとして挿入し、秘密情報や内部命令をtemplateへ含めない。
@@ -323,7 +326,7 @@ HTMLは保存時に「sanitizeして意味を変える」のではなくplain te
 ## 18. MVPの実装順序
 
 1. Foundation: Next.js、DB、migration、env検証、CI、共通error。
-2. Preparation vertical slice: session CRUD、表現quick add、prompt生成・copy。
+2. Preparation vertical slice: 最小項目のsession CRUD、独立した表現CRUDと関連付け、prompt生成・copy。
 3. Authentication: Better Auth、所有者スコープ、sign-in/up、既存devデータ移行。
 4. Practice tracking: status transition、開始/終了、外部URL、使用表現check。
 5. Import staging: paste/file、raw保存、size/JSON/schema検証、preview。
@@ -347,7 +350,7 @@ HTMLは保存時に「sanitizeして意味を変える」のではなくplain te
 
 - P-01 session input/domain/state enum。
 - P-02 session repositoryとcreate/list/detail。
-- P-03 expression quick addとsnapshot。
+- P-03 独立したexpression CRUD、session関連付け、snapshot。
 - P-04 generic prompt v1、snapshot、単体test。
 - P-05 responsive create/list/detail UIとcopy。
 - P-06 edit/deleteと競合制御。

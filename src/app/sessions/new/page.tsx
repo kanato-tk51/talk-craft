@@ -10,7 +10,7 @@ export default function NewSessionPage() {
       <div className="page-intro">
         <div className="eyebrow">NEW SESSION</div>
         <h1>次の会話を準備する</h1>
-        <p>空欄があっても大丈夫です。テーマと目的から、外部AIで使える汎用プロンプトを作ります。</p>
+        <p>テーマを入力すると、外部AIで使える汎用プロンプトを作ります。目的は任意です。</p>
       </div>
       <CreateSessionForm />
     </div>

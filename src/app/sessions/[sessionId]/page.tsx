@@ -5,24 +5,11 @@ import { z } from "zod";
 
 import { PromptPanel } from "@/components/prompt-panel";
 import { getSessionDetail } from "@/modules/sessions/application/session-service";
+import { linkExpressionAction, unlinkExpressionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "セッション準備" };
-
-const typeLabels = {
-  voice: "音声会話",
-  text: "テキストチャット",
-  mixed: "音声とテキスト",
-  unknown: "未定",
-};
-
-const difficultyLabels = {
-  beginner: "初級",
-  intermediate: "中級",
-  advanced: "上級",
-  unspecified: "指定なし",
-};
 
 export default async function SessionDetailPage({
   params,
@@ -39,7 +26,7 @@ export default async function SessionDetailPage({
     notFound();
   }
 
-  const { session, preparedExpressions, prompts } = detail;
+  const { session, linkedExpressions, availableExpressions, prompts } = detail;
   const startPrompt = prompts.find((prompt) => prompt.type === "conversation_start");
   const reviewPrompt = prompts.find((prompt) => prompt.type === "review_output");
 
@@ -53,18 +40,8 @@ export default async function SessionDetailPage({
         <div>
           <div className="eyebrow">SESSION PREPARATION</div>
           <h1>{session.title}</h1>
-          <p>{session.objective}</p>
+          {session.objective ? <p>{session.objective}</p> : null}
         </div>
-        {session.providerWebsiteUrlSnapshot ? (
-          <a
-            className="button button-primary"
-            href={session.providerWebsiteUrlSnapshot}
-            rel="noreferrer"
-            target="_blank"
-          >
-            外部AIを開く ↗
-          </a>
-        ) : null}
       </section>
 
       <div className="session-facts">
@@ -72,65 +49,75 @@ export default async function SessionDetailPage({
           <span>テーマ</span>
           <b>{session.topic}</b>
         </div>
-        <div>
-          <span>会話方法</span>
-          <b>{typeLabels[session.conversationType]}</b>
-        </div>
-        <div>
-          <span>難易度</span>
-          <b>{difficultyLabels[session.difficulty]}</b>
-        </div>
-        <div>
-          <span>時間</span>
-          <b>{session.plannedDurationMinutes ? `${session.plannedDurationMinutes}分` : "未定"}</b>
-        </div>
-        <div>
-          <span>利用AI</span>
-          <b>{session.providerNameSnapshot || "未定"}</b>
-        </div>
-        <div>
-          <span>予定</span>
-          <b>
-            {session.scheduledAt
-              ? new Intl.DateTimeFormat("ja-JP", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(session.scheduledAt)
-              : "未定"}
-          </b>
-        </div>
       </div>
 
       <section className="preparation-card">
         <div className="section-title-row">
           <div>
             <div className="eyebrow">EXPRESSIONS</div>
-            <h2>今回使ってみる表現</h2>
+            <h2>このセッションに関連する表現</h2>
           </div>
-          <span>{preparedExpressions.length} expressions</span>
+          <span>{linkedExpressions.length} expressions</span>
         </div>
-        {preparedExpressions.length ? (
+        {linkedExpressions.length ? (
           <ol className="expression-list">
-            {preparedExpressions.map((expression) => (
+            {linkedExpressions.map((expression) => (
               <li key={expression.id}>
-                <span>{expression.expressionEn}</span>
-                {expression.meaningJa ? <small>{expression.meaningJa}</small> : null}
+                {expression.learningStatus === "archived" ? (
+                  <div className="expression-link">
+                    <span>{expression.expressionEn}</span>
+                    <small>{expression.meaningJa || "ライブラリから削除済み"}</small>
+                  </div>
+                ) : (
+                  <Link
+                    className="expression-link"
+                    href={`/expressions/${expression.expressionId}/edit?sessionId=${session.id}`}
+                  >
+                    <span>{expression.expressionEn}</span>
+                    {expression.meaningJa ? <small>{expression.meaningJa}</small> : null}
+                  </Link>
+                )}
+                <form action={unlinkExpressionAction.bind(null, session.id, expression.id)}>
+                  <button className="inline-action" type="submit">
+                    関連付けを解除
+                  </button>
+                </form>
               </li>
             ))}
           </ol>
         ) : (
           <p className="muted">
-            事前表現は登録されていません。テーマと目的だけでも会話を開始できます。
+            関連表現は登録されていません。表現は会話開始用プロンプトとは独立して管理されます。
           </p>
         )}
-      </section>
 
-      {session.preparationNotes ? (
-        <aside className="focus-note">
-          <span>FOCUS</span>
-          <p>{session.preparationNotes}</p>
-        </aside>
-      ) : null}
+        <div className="expression-association">
+          {availableExpressions.length ? (
+            <form action={linkExpressionAction.bind(null, session.id)}>
+              <label className="field">
+                <span>表現ライブラリから追加</span>
+                <select name="expressionId" required defaultValue="">
+                  <option value="" disabled>
+                    表現を選択
+                  </option>
+                  {availableExpressions.map((expression) => (
+                    <option key={expression.id} value={expression.id}>
+                      {expression.expressionEn}
+                      {expression.meaningJa ? ` — ${expression.meaningJa}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="button button-secondary" type="submit">
+                関連付ける
+              </button>
+            </form>
+          ) : null}
+          <Link className="text-action" href={`/expressions/new?sessionId=${session.id}`}>
+            ＋ 新しい表現をライブラリへ登録
+          </Link>
+        </div>
+      </section>
 
       <div className="prompt-stack">
         {startPrompt ? (

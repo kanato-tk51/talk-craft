@@ -23,9 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Link>
             <nav aria-label="メインナビゲーション">
               <Link href="/sessions">セッション</Link>
-              <span className="nav-disabled" aria-disabled="true">
-                表現ライブラリ
-              </span>
+              <Link href="/expressions">表現ライブラリ</Link>
             </nav>
             <Link className="header-action" href="/sessions/new">
               ＋ 新しいセッション

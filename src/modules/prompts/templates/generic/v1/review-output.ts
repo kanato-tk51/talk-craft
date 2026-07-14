@@ -76,9 +76,7 @@ const outputShape = {
 };
 
 export function renderReviewOutputPrompt(input: PromptInput): string {
-  const preparedExpressions = input.preparedExpressions.map(
-    (expression) => expression.expressionEn,
-  );
+  const linkedExpressions = input.linkedExpressions.map((expression) => expression.expressionEn);
 
   return `ここまでの英会話セッションを終了します。
 
@@ -90,7 +88,7 @@ export function renderReviewOutputPrompt(input: PromptInput): string {
 - 逐語的に参照できない発言を推測して会話ログに追加しないでください。
 - 正確な発言は accuracy を "exact"、要旨だけなら "paraphrased"、推定を含むなら "inferred"、判断不能なら "unknown" にしてください。
 - 分からない文字列は空文字、配列は空配列、使用状況は null、列挙は unknown を使用してください。
-- prepared_expressions には、次の事前表現をそれぞれ含めてください: ${JSON.stringify(preparedExpressions)}
+- prepared_expressions には、このセッションに関連付けられた次の表現をそれぞれ含めてください: ${JSON.stringify(linkedExpressions)}
 - JSONの前後に説明文やMarkdownのコードブロックを付けないでください。
 - schema_version は必ず "1.0" にしてください。
 

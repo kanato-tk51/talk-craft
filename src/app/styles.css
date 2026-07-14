@@ -100,11 +100,6 @@ nav a {
 nav a:hover {
   color: var(--green);
 }
-.nav-disabled {
-  color: #9b9f9b;
-  cursor: not-allowed;
-}
-
 .header-action {
   justify-self: end;
   color: var(--green);
@@ -301,6 +296,45 @@ nav a:hover {
   color: #a6412d;
   font-size: 0.78rem;
 }
+.field-help {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.expression-entry-list {
+  display: grid;
+  gap: 16px;
+}
+.expression-entry {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 45%);
+}
+.expression-entry-heading {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.expression-entry-heading strong {
+  color: var(--green);
+  font:
+    italic 500 0.78rem Georgia,
+    serif;
+  letter-spacing: 0.06em;
+}
+.expression-entry-empty {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed #b9b9ae;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-align: center;
+}
+.expression-add-button {
+  justify-self: start;
+  margin-top: 18px;
+}
 .error-summary {
   padding: 14px 17px;
   border-left: 4px solid var(--orange);
@@ -329,7 +363,7 @@ nav a:hover {
 }
 .session-row {
   display: grid;
-  grid-template-columns: 75px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 30px;
   align-items: center;
   padding: 27px 15px;
@@ -343,19 +377,6 @@ nav a:hover {
   padding-right: 25px;
   padding-left: 25px;
   background: rgb(255 253 248 / 70%);
-}
-.session-date {
-  display: grid;
-  text-align: center;
-}
-.session-date b {
-  font:
-    500 2rem / 1 Georgia,
-    serif;
-}
-.session-date span {
-  color: var(--muted);
-  font-size: 0.75rem;
 }
 .session-main h2 {
   margin: 7px 0 2px;
@@ -442,7 +463,7 @@ nav a:hover {
 
 .session-facts {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: 1fr;
   margin: 55px 0 24px;
   border-block: 1px solid var(--line);
 }
@@ -508,28 +529,99 @@ nav a:hover {
 .expression-list small {
   color: var(--muted);
 }
+.expression-link {
+  display: grid;
+  color: inherit;
+  text-decoration: none;
+}
+.expression-link:hover span {
+  color: var(--green);
+}
+.inline-action,
+.danger-link,
+.text-action {
+  border: 0;
+  color: var(--green);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.inline-action:hover,
+.text-action:hover {
+  text-decoration: underline;
+}
+.danger-link {
+  color: #a6412d;
+}
+.expression-association {
+  display: flex;
+  gap: 22px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.expression-association form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  min-width: min(100%, 560px);
+}
+.expression-association .field {
+  flex: 1;
+}
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.expression-card {
+  display: block;
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+.expression-card:hover {
+  border-color: var(--green);
+  transform: translateY(-2px);
+}
+.expression-card h2 {
+  margin: 14px 0 4px;
+  font:
+    500 1.35rem / 1.4 Georgia,
+    serif;
+  overflow-wrap: anywhere;
+}
+.expression-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.expression-card small {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-intro {
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
 .muted {
   color: var(--muted);
 }
 
-.focus-note {
-  display: flex;
-  gap: 25px;
-  align-items: baseline;
-  margin: 20px 0;
-  padding: 19px 25px;
-  color: #ecf2ed;
-  background: var(--green);
-}
-.focus-note span {
-  color: var(--lime);
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.15em;
-}
-.focus-note p {
-  margin: 0;
-}
 .prompt-stack {
   display: grid;
   gap: 24px;
@@ -677,7 +769,7 @@ code {
     margin-top: 10px;
   }
   .session-row {
-    grid-template-columns: 54px 1fr;
+    grid-template-columns: 1fr;
     gap: 17px;
     padding-inline: 0;
   }
@@ -704,6 +796,21 @@ code {
   .expression-list li {
     grid-template-columns: 1fr;
     gap: 3px;
+  }
+  .expression-entry {
+    padding: 18px;
+  }
+  .expression-add-button {
+    justify-self: stretch;
+  }
+  .library-grid {
+    grid-template-columns: 1fr;
+  }
+  .expression-association,
+  .expression-association form,
+  .split-intro {
+    align-items: stretch;
+    flex-direction: column;
   }
   .copy-button {
     width: 100%;

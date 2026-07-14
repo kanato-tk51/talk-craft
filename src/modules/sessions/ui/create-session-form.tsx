@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  startTransition,
+  useActionState,
+  useRef,
+  useState,
+} from "react";
 
 import { createSessionAction } from "@/app/sessions/new/actions";
 import type { CreateSessionActionState } from "../application/action-state";
+import { MAX_LINKED_EXPRESSIONS } from "../domain/create-session";
 
 const initialState: CreateSessionActionState = {
   message: "",
@@ -13,23 +21,43 @@ const initialState: CreateSessionActionState = {
 
 export function CreateSessionForm() {
   const [state, formAction, pending] = useActionState(createSessionAction, initialState);
-  const timezoneOffsetRef = useRef<HTMLInputElement>(null);
+  const [expressionIds, setExpressionIds] = useState<number[]>([]);
+  const nextExpressionId = useRef(1);
+
+  function addExpression() {
+    const id = nextExpressionId.current;
+    nextExpressionId.current += 1;
+    setExpressionIds((current) => [...current, id]);
+    requestAnimationFrame(() => document.getElementById(`linked-expression-${id}`)?.focus());
+  }
+
+  function removeExpression(id: number) {
+    setExpressionIds((current) => current.filter((currentId) => currentId !== id));
+  }
 
   function fieldError(name: string) {
     const error = state.fieldErrors[name]?.[0];
     return error ? <p className="field-error">{error}</p> : null;
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => formAction(formData));
+  }
+
+  function preventImplicitSubmit(event: KeyboardEvent<HTMLFormElement>) {
+    if (
+      event.key === "Enter" &&
+      !event.nativeEvent.isComposing &&
+      event.target instanceof HTMLInputElement
+    ) {
+      event.preventDefault();
+    }
+  }
+
   return (
-    <form
-      action={formAction}
-      className="session-form"
-      onSubmit={() => {
-        if (timezoneOffsetRef.current) {
-          timezoneOffsetRef.current.value = String(new Date().getTimezoneOffset());
-        }
-      }}
-    >
+    <form className="session-form" onKeyDown={preventImplicitSubmit} onSubmit={handleSubmit}>
       {state.message ? (
         <div className="error-summary" role="alert" tabIndex={-1}>
           {state.message}
@@ -54,7 +82,7 @@ export function CreateSessionForm() {
             {fieldError("title")}
           </label>
 
-          <label className="field">
+          <label className="field field-wide">
             <span>
               会話テーマ <b>必須</b>
             </span>
@@ -62,147 +90,87 @@ export function CreateSessionForm() {
             {fieldError("topic")}
           </label>
 
-          <label className="field">
-            <span>予定日時</span>
-            <input name="scheduledAtLocal" type="datetime-local" />
-            <input
-              ref={timezoneOffsetRef}
-              name="timezoneOffsetMinutes"
-              type="hidden"
-              value="0"
-              readOnly
-            />
-          </label>
-
           <label className="field field-wide">
-            <span>
-              今回の目的 <b>必須</b>
-            </span>
+            <span>今回の目的（任意）</span>
             <textarea
               name="objective"
               maxLength={2000}
-              required
               rows={3}
               placeholder="自分の仕事内容と役割を、短文で止まらず自然に説明できるようになる"
             />
             {fieldError("objective")}
-          </label>
-
-          <label className="field field-wide">
-            <span>シチュエーション</span>
-            <textarea
-              name="situation"
-              maxLength={2000}
-              rows={2}
-              placeholder="初めて会う海外の取引先とのカジュアルな打ち合わせ"
-            />
-          </label>
-
-          <label className="field">
-            <span>あなたの役割</span>
-            <input name="userRole" maxLength={500} placeholder="プロジェクトリード" />
-          </label>
-
-          <label className="field">
-            <span>AIに担当してほしい役割</span>
-            <input name="aiRole" maxLength={500} placeholder="海外の取引先担当者" />
-          </label>
-        </div>
-      </section>
-
-      <section className="form-section" aria-labelledby="conditions-heading">
-        <div className="section-heading">
-          <span className="step-number">02</span>
-          <div>
-            <h2 id="conditions-heading">会話の条件</h2>
-            <p>使うサービスは後から決めても構いません。</p>
-          </div>
-        </div>
-
-        <div className="form-grid">
-          <label className="field">
-            <span>会話方法</span>
-            <select name="conversationType" defaultValue="voice">
-              <option value="voice">音声会話</option>
-              <option value="text">テキストチャット</option>
-              <option value="mixed">音声とテキスト</option>
-              <option value="unknown">未定</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span>難易度</span>
-            <select name="difficulty" defaultValue="intermediate">
-              <option value="beginner">初級</option>
-              <option value="intermediate">中級</option>
-              <option value="advanced">上級</option>
-              <option value="unspecified">指定なし</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span>会話時間の目安（分）</span>
-            <input
-              name="plannedDurationMinutes"
-              type="number"
-              min={1}
-              max={240}
-              defaultValue={15}
-            />
-          </label>
-
-          <label className="field">
-            <span>利用するAIサービス</span>
-            <input name="providerName" maxLength={200} placeholder="未定でも保存できます" />
-          </label>
-
-          <label className="field">
-            <span>AIサービスのURL</span>
-            <input name="providerWebsiteUrl" type="url" placeholder="https://…" maxLength={2000} />
-            {fieldError("providerWebsiteUrl")}
-          </label>
-
-          <label className="field">
-            <span>モデル名（任意）</span>
-            <input name="modelName" maxLength={200} placeholder="不明なら空欄" />
-          </label>
-
-          <label className="field field-wide">
-            <span>今回意識すること</span>
-            <textarea
-              name="preparationNotes"
-              maxLength={5000}
-              rows={3}
-              placeholder="短い文章だけで終わらず、理由や具体例まで伝える"
-            />
           </label>
         </div>
       </section>
 
       <section className="form-section form-section-accent" aria-labelledby="expressions-heading">
         <div className="section-heading">
-          <span className="step-number">03</span>
+          <span className="step-number">02</span>
           <div>
-            <h2 id="expressions-heading">使ってみたい表現</h2>
-            <p>
-              1行に1表現。日本語の意味は <code>|</code> の後ろに書けます。
-            </p>
+            <h2 id="expressions-heading">関連付ける表現</h2>
+            <p>表現は独立したライブラリへ保存され、このセッションと関連付けられます。</p>
           </div>
         </div>
 
-        <label className="field">
-          <span>英語表現 | 日本語の意味</span>
-          <textarea
-            name="preparedExpressions"
-            maxLength={100000}
-            rows={7}
-            spellCheck
-            placeholder={
-              "I act as a bridge between the teams. | チーム間の橋渡し役をしています\nI coordinate with multiple stakeholders. | 複数の関係者と調整します"
-            }
-          />
-          {fieldError("preparedExpressions")}
-        </label>
+        {expressionIds.length ? (
+          <div className="expression-entry-list">
+            {expressionIds.map((id, index) => (
+              <div className="expression-entry" key={id}>
+                <div className="expression-entry-heading">
+                  <strong>表現 {String(index + 1).padStart(2, "0")}</strong>
+                  <button
+                    className="inline-action"
+                    type="button"
+                    onClick={() => removeExpression(id)}
+                    disabled={pending}
+                  >
+                    この表現を削除
+                  </button>
+                </div>
+                <div className="form-grid">
+                  <label className="field">
+                    <span>
+                      英語表現 <b>必須</b>
+                    </span>
+                    <input
+                      id={`linked-expression-${id}`}
+                      name="linkedExpressionEn"
+                      maxLength={1000}
+                      required
+                      spellCheck
+                      placeholder="I act as a bridge between the teams."
+                    />
+                  </label>
+                  <label className="field">
+                    <span>日本語の意味（任意）</span>
+                    <input
+                      name="linkedExpressionMeaningJa"
+                      maxLength={1000}
+                      placeholder="チーム間の橋渡し役をしています"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="expression-entry-empty">
+            関連付ける表現はまだありません。必要な数だけ、1件ずつ追加できます。
+          </p>
+        )}
+
+        {fieldError("linkedExpressions")}
+        <button
+          className="button button-secondary expression-add-button"
+          type="button"
+          onClick={addExpression}
+          disabled={pending || expressionIds.length >= MAX_LINKED_EXPRESSIONS}
+        >
+          ＋ 表現を追加
+        </button>
+        <small className="field-help">
+          各表現はライブラリの独立したデータとして保存されます。会話開始用プロンプトには含まれません。
+        </small>
       </section>
 
       <div className="form-actions">

@@ -113,6 +113,82 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Session" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /expressions:
+    get:
+      operationId: listExpressions
+      responses:
+        "200":
+          description: Expressions owned by the current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Expression" }
+    post:
+      operationId: createExpression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpressionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expression" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+  /expressions/{expressionId}:
+    parameters:
+      - $ref: "#/components/parameters/ExpressionId"
+    get:
+      operationId: getExpression
+      responses:
+        "200":
+          description: Expression detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expression" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateExpression
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: "#/components/schemas/ExpressionInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expression" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+    delete:
+      operationId: archiveExpression
+      responses:
+        "204": { description: Archived while historical session links are retained }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sessions/{sessionId}/expressions/{expressionId}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+      - $ref: "#/components/parameters/ExpressionId"
+    post:
+      operationId: linkExpressionToSession
+      responses:
+        "204": { description: Linked }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: unlinkExpressionFromSession
+      responses:
+        "204": { description: Unlinked }
+        "404": { $ref: "#/components/responses/NotFound" }
   /sessions/{sessionId}/imports:
     parameters:
       - $ref: "#/components/parameters/SessionId"
@@ -215,6 +291,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ExpressionId:
+      name: expressionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     IfMatch:
       name: If-Match
       in: header
@@ -224,31 +305,18 @@ components:
     SessionStatus:
       type: string
       enum: [draft, ready, in_progress, awaiting_review, completed, archived]
-    ConversationType:
-      type: string
-      enum: [voice, text, mixed, unknown]
     CreateSession:
       type: object
       additionalProperties: false
-      required: [title, topic, objective, conversation_type]
+      required: [title, topic]
       properties:
         title: { type: string, minLength: 1, maxLength: 120 }
         topic: { type: string, minLength: 1, maxLength: 500 }
-        objective: { type: string, minLength: 1, maxLength: 2000 }
-        situation: { type: string, maxLength: 2000 }
-        ai_role: { type: string, maxLength: 500 }
-        conversation_type: { $ref: "#/components/schemas/ConversationType" }
-        provider_name: { type: string, maxLength: 200 }
-        external_conversation_url: { type: string, format: uri, maxLength: 2000 }
-        prepared_expressions:
+        objective: { type: string, maxLength: 2000 }
+        linked_expression_ids:
           type: array
           maxItems: 100
-          items:
-            type: object
-            required: [expression_en]
-            properties:
-              expression_en: { type: string, minLength: 1, maxLength: 1000 }
-              meaning_ja: { type: string, maxLength: 1000 }
+          items: { type: string, format: uuid }
     Session:
       allOf:
         - $ref: "#/components/schemas/CreateSession"
@@ -258,6 +326,38 @@ components:
             id: { type: string, format: uuid }
             status: { $ref: "#/components/schemas/SessionStatus" }
             version: { type: integer, minimum: 1 }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    ExpressionInput:
+      type: object
+      additionalProperties: false
+      required: [expression_en]
+      properties:
+        expression_en: { type: string, minLength: 1, maxLength: 1000 }
+        meaning_ja: { type: string, maxLength: 1000 }
+        alternative_expressions:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 1000 }
+        examples:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        related_words:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 500 }
+        usage_notes: { type: string, maxLength: 5000 }
+        pronunciation_notes: { type: string, maxLength: 2000 }
+        learning_status: { enum: [new, practicing, active, mastered] }
+        priority: { enum: [high, medium, low] }
+    Expression:
+      allOf:
+        - $ref: "#/components/schemas/ExpressionInput"
+        - type: object
+          required: [id, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
             created_at: { type: string, format: date-time }
             updated_at: { type: string, format: date-time }
     ValidationIssue:

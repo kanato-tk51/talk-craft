@@ -14,16 +14,7 @@ export function renderSessionPrompts(input: CreateSessionInput): RenderedPromptS
     title: input.title,
     topic: input.topic,
     objective: input.objective,
-    situation: input.situation,
-    userRole: input.userRole,
-    aiRole: input.aiRole,
-    conversationType: input.conversationType,
-    difficulty: input.difficulty,
-    plannedDurationMinutes: input.plannedDurationMinutes,
-    preparationNotes: input.preparationNotes,
-    providerName: input.providerName,
-    modelName: input.modelName,
-    preparedExpressions: input.preparedExpressions,
+    linkedExpressions: input.linkedExpressions,
   };
 
   return {

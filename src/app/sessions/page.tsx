@@ -15,13 +15,6 @@ const statusLabels = {
   archived: "アーカイブ",
 };
 
-const typeLabels = {
-  voice: "音声",
-  text: "テキスト",
-  mixed: "音声＋テキスト",
-  unknown: "未定",
-};
-
 export default async function SessionsPage() {
   const sessionItems = await listSessions();
 
@@ -42,7 +35,7 @@ export default async function SessionsPage() {
         <section className="empty-state">
           <span className="empty-mark">01</span>
           <h2>最初の会話を準備しましょう</h2>
-          <p>会話テーマ、目的、使いたい表現から、外部AIで使うプロンプトを作成できます。</p>
+          <p>会話テーマを決めて、外部AIで使うプロンプトを作成できます。</p>
           <Link className="button button-primary" href="/sessions/new">
             セッションを作る
           </Link>
@@ -51,29 +44,11 @@ export default async function SessionsPage() {
         <div className="session-list">
           {sessionItems.map((session) => (
             <Link className="session-row" href={`/sessions/${session.id}`} key={session.id}>
-              <div className="session-date">
-                <b>
-                  {session.scheduledAt
-                    ? new Intl.DateTimeFormat("ja-JP", { day: "2-digit" }).format(
-                        session.scheduledAt,
-                      )
-                    : "—"}
-                </b>
-                <span>
-                  {session.scheduledAt
-                    ? new Intl.DateTimeFormat("ja-JP", { month: "short" }).format(
-                        session.scheduledAt,
-                      )
-                    : "未定"}
-                </span>
-              </div>
               <div className="session-main">
                 <div className="session-meta">
                   <span className={`status status-${session.status}`}>
                     {statusLabels[session.status]}
                   </span>
-                  <span>{typeLabels[session.conversationType]}</span>
-                  {session.providerName ? <span>{session.providerName}</span> : <span>AI未定</span>}
                 </div>
                 <h2>{session.title}</h2>
                 <p>{session.topic}</p>

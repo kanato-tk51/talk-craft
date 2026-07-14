@@ -6,6 +6,8 @@ import {
   findSessionDetail,
   findSessionsForUser,
   insertSessionWithPreparation,
+  linkExpressionRecord,
+  unlinkExpressionRecord,
 } from "../infrastructure/session-repository";
 
 export async function createSession(input: CreateSessionInput): Promise<string> {
@@ -22,4 +24,12 @@ export async function listSessions() {
 
 export async function getSessionDetail(sessionId: string) {
   return findSessionDetail(getCurrentActorId(), sessionId);
+}
+
+export async function linkExpression(sessionId: string, expressionId: string) {
+  return linkExpressionRecord(getCurrentActorId(), sessionId, expressionId);
+}
+
+export async function unlinkExpression(sessionId: string, sessionExpressionId: string) {
+  return unlinkExpressionRecord(getCurrentActorId(), sessionId, sessionExpressionId);
 }

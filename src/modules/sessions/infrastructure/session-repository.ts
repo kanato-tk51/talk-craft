@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { expressions, generatedPrompts, sessionExpressions, sessions } from "@/db/schema";
@@ -17,20 +17,9 @@ export async function insertSessionWithPreparation(
       .insert(sessions)
       .values({
         userId: actorUserId,
-        providerNameSnapshot: input.providerName,
-        providerWebsiteUrlSnapshot: input.providerWebsiteUrl,
-        modelName: input.modelName,
         title: input.title,
         topic: input.topic,
         objective: input.objective,
-        situation: input.situation,
-        userRole: input.userRole,
-        aiRole: input.aiRole,
-        conversationType: input.conversationType,
-        difficulty: input.difficulty,
-        plannedDurationMinutes: input.plannedDurationMinutes,
-        scheduledAt: input.scheduledAt,
-        preparationNotes: input.preparationNotes,
       })
       .returning({ id: sessions.id });
 
@@ -38,23 +27,46 @@ export async function insertSessionWithPreparation(
       throw new Error("Failed to create session");
     }
 
-    for (const [sequence, expression] of input.preparedExpressions.entries()) {
-      const [libraryExpression] = await transaction
-        .insert(expressions)
-        .values({
-          userId: actorUserId,
-          expressionEn: expression.expressionEn,
-          normalizedExpressionEn: normalizeExpression(expression.expressionEn),
-          meaningJa: expression.meaningJa,
-        })
-        .onConflictDoUpdate({
-          target: [expressions.userId, expressions.normalizedExpressionEn],
-          set: { updatedAt: new Date() },
-        })
-        .returning({ id: expressions.id });
+    for (const [sequence, expression] of input.linkedExpressions.entries()) {
+      const normalizedExpressionEn = normalizeExpression(expression.expressionEn);
+      const [existingExpression] = await transaction
+        .select({ id: expressions.id, learningStatus: expressions.learningStatus })
+        .from(expressions)
+        .where(
+          and(
+            eq(expressions.userId, actorUserId),
+            eq(expressions.normalizedExpressionEn, normalizedExpressionEn),
+          ),
+        )
+        .limit(1);
+
+      let libraryExpression = existingExpression;
+      if (existingExpression?.learningStatus === "archived") {
+        [libraryExpression] = await transaction
+          .update(expressions)
+          .set({
+            expressionEn: expression.expressionEn,
+            normalizedExpressionEn,
+            meaningJa: expression.meaningJa,
+            learningStatus: "new",
+            updatedAt: new Date(),
+          })
+          .where(eq(expressions.id, existingExpression.id))
+          .returning({ id: expressions.id, learningStatus: expressions.learningStatus });
+      } else if (!existingExpression) {
+        [libraryExpression] = await transaction
+          .insert(expressions)
+          .values({
+            userId: actorUserId,
+            expressionEn: expression.expressionEn,
+            normalizedExpressionEn,
+            meaningJa: expression.meaningJa,
+          })
+          .returning({ id: expressions.id, learningStatus: expressions.learningStatus });
+      }
 
       if (!libraryExpression) {
-        throw new Error("Failed to create prepared expression");
+        throw new Error("Failed to create linked expression");
       }
 
       await transaction.insert(sessionExpressions).values({
@@ -97,14 +109,11 @@ export async function findSessionsForUser(actorUserId: string) {
       title: sessions.title,
       topic: sessions.topic,
       status: sessions.status,
-      conversationType: sessions.conversationType,
-      providerName: sessions.providerNameSnapshot,
-      scheduledAt: sessions.scheduledAt,
       createdAt: sessions.createdAt,
     })
     .from(sessions)
     .where(eq(sessions.userId, actorUserId))
-    .orderBy(desc(sessions.scheduledAt), desc(sessions.createdAt));
+    .orderBy(desc(sessions.createdAt));
 }
 
 export async function findSessionDetail(actorUserId: string, sessionId: string) {
@@ -118,15 +127,18 @@ export async function findSessionDetail(actorUserId: string, sessionId: string) 
     return null;
   }
 
-  const [preparedExpressions, prompts] = await Promise.all([
+  const [linkedExpressions, prompts, libraryExpressions] = await Promise.all([
     db
       .select({
         id: sessionExpressions.id,
-        expressionEn: sessionExpressions.expressionEnSnapshot,
-        meaningJa: sessionExpressions.meaningJaSnapshot,
+        expressionId: sessionExpressions.expressionId,
+        expressionEn: expressions.expressionEn,
+        meaningJa: expressions.meaningJa,
+        learningStatus: expressions.learningStatus,
         plannedToUse: sessionExpressions.plannedToUse,
       })
       .from(sessionExpressions)
+      .innerJoin(expressions, eq(sessionExpressions.expressionId, expressions.id))
       .where(eq(sessionExpressions.sessionId, sessionId))
       .orderBy(asc(sessionExpressions.sequence)),
     db
@@ -140,7 +152,104 @@ export async function findSessionDetail(actorUserId: string, sessionId: string) 
       .from(generatedPrompts)
       .where(eq(generatedPrompts.sessionId, sessionId))
       .orderBy(asc(generatedPrompts.createdAt)),
+    db
+      .select({
+        id: expressions.id,
+        expressionEn: expressions.expressionEn,
+        meaningJa: expressions.meaningJa,
+      })
+      .from(expressions)
+      .where(and(eq(expressions.userId, actorUserId), ne(expressions.learningStatus, "archived")))
+      .orderBy(asc(expressions.expressionEn)),
   ]);
 
-  return { session, preparedExpressions, prompts };
+  const linkedIds = new Set(linkedExpressions.map((expression) => expression.expressionId));
+  const availableExpressions = libraryExpressions.filter(
+    (expression) => !linkedIds.has(expression.id),
+  );
+
+  return { session, linkedExpressions, availableExpressions, prompts };
+}
+
+export async function linkExpressionRecord(
+  actorUserId: string,
+  sessionId: string,
+  expressionId: string,
+) {
+  return db.transaction(async (transaction) => {
+    const [[ownedSession], [ownedExpression]] = await Promise.all([
+      transaction
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, actorUserId)))
+        .limit(1),
+      transaction
+        .select({
+          id: expressions.id,
+          expressionEn: expressions.expressionEn,
+          meaningJa: expressions.meaningJa,
+        })
+        .from(expressions)
+        .where(
+          and(
+            eq(expressions.id, expressionId),
+            eq(expressions.userId, actorUserId),
+            ne(expressions.learningStatus, "archived"),
+          ),
+        )
+        .limit(1),
+    ]);
+
+    if (!ownedSession || !ownedExpression) {
+      return false;
+    }
+
+    const [lastExpression] = await transaction
+      .select({ sequence: sessionExpressions.sequence })
+      .from(sessionExpressions)
+      .where(eq(sessionExpressions.sessionId, sessionId))
+      .orderBy(desc(sessionExpressions.sequence))
+      .limit(1);
+
+    await transaction
+      .insert(sessionExpressions)
+      .values({
+        sessionId,
+        expressionId,
+        expressionEnSnapshot: ownedExpression.expressionEn,
+        meaningJaSnapshot: ownedExpression.meaningJa,
+        sequence: (lastExpression?.sequence ?? -1) + 1,
+      })
+      .onConflictDoNothing();
+
+    return true;
+  });
+}
+
+export async function unlinkExpressionRecord(
+  actorUserId: string,
+  sessionId: string,
+  sessionExpressionId: string,
+) {
+  const [ownedSession] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.userId, actorUserId)))
+    .limit(1);
+
+  if (!ownedSession) {
+    return false;
+  }
+
+  const [removed] = await db
+    .delete(sessionExpressions)
+    .where(
+      and(
+        eq(sessionExpressions.id, sessionExpressionId),
+        eq(sessionExpressions.sessionId, sessionId),
+      ),
+    )
+    .returning({ id: sessionExpressions.id });
+
+  return Boolean(removed);
 }
