@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://talk-craft.example/schemas/session-review.v1.schema.json",
+  "title": "Talk Craft session review import v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "session_summary",
+    "conversation",
+    "prepared_expressions",
+    "good_points",
+    "corrections",
+    "missed_opportunities",
+    "listening_review",
+    "expressions_for_next_session",
+    "next_session"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ai_provider",
+        "model_name",
+        "conversation_type",
+        "record_completeness",
+        "contains_ai_inference"
+      ],
+      "properties": {
+        "ai_provider": { "$ref": "#/$defs/shortText" },
+        "model_name": { "$ref": "#/$defs/shortText" },
+        "conversation_type": {
+          "enum": ["voice", "text", "mixed", "unknown"]
+        },
+        "record_completeness": {
+          "enum": ["complete", "partial", "summary_only", "manual", "unknown"]
+        },
+        "contains_ai_inference": {
+          "type": ["boolean", "null"]
+        }
+      }
+    },
+    "session_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "situation", "user_role", "ai_role", "summary_ja", "summary_en"],
+      "properties": {
+        "topic": { "$ref": "#/$defs/mediumText" },
+        "situation": { "$ref": "#/$defs/longText" },
+        "user_role": { "$ref": "#/$defs/mediumText" },
+        "ai_role": { "$ref": "#/$defs/mediumText" },
+        "summary_ja": { "$ref": "#/$defs/longText" },
+        "summary_en": { "$ref": "#/$defs/longText" }
+      }
+    },
+    "conversation": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["speaker", "text_en", "text_ja", "notes", "accuracy"],
+        "properties": {
+          "speaker": { "enum": ["user", "ai", "unknown"] },
+          "text_en": { "$ref": "#/$defs/messageText" },
+          "text_ja": { "$ref": "#/$defs/messageText" },
+          "notes": { "$ref": "#/$defs/longText" },
+          "accuracy": {
+            "enum": ["exact", "paraphrased", "inferred", "unknown"]
+          },
+          "is_exact_transcript": {
+            "description": "Deprecated compatibility field. Use accuracy.",
+            "type": ["boolean", "null"]
+          }
+        }
+      }
+    },
+    "prepared_expressions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expression", "used", "usage_evaluation", "better_example"],
+        "properties": {
+          "expression": { "$ref": "#/$defs/mediumText" },
+          "used": { "type": ["boolean", "null"] },
+          "usage_evaluation": { "$ref": "#/$defs/longText" },
+          "better_example": { "$ref": "#/$defs/longText" }
+        }
+      }
+    },
+    "good_points": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "example"],
+        "properties": {
+          "description": { "$ref": "#/$defs/longText" },
+          "example": { "$ref": "#/$defs/longText" }
+        }
+      }
+    },
+    "corrections": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["original", "corrected", "more_natural", "reason_ja", "category"],
+        "properties": {
+          "original": { "$ref": "#/$defs/messageText" },
+          "corrected": { "$ref": "#/$defs/messageText" },
+          "more_natural": { "$ref": "#/$defs/messageText" },
+          "reason_ja": { "$ref": "#/$defs/longText" },
+          "category": {
+            "enum": [
+              "grammar",
+              "vocabulary",
+              "naturalness",
+              "pronunciation",
+              "communication",
+              "unknown"
+            ]
+          }
+        }
+      }
+    },
+    "missed_opportunities": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "situation",
+          "what_i_wanted_to_say_ja",
+          "recommended_expression_en",
+          "example"
+        ],
+        "properties": {
+          "situation": { "$ref": "#/$defs/longText" },
+          "what_i_wanted_to_say_ja": { "$ref": "#/$defs/longText" },
+          "recommended_expression_en": { "$ref": "#/$defs/longText" },
+          "example": { "$ref": "#/$defs/longText" }
+        }
+      }
+    },
+    "listening_review": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ai_expression",
+          "meaning_ja",
+          "why_it_may_be_difficult",
+          "related_expressions"
+        ],
+        "properties": {
+          "ai_expression": { "$ref": "#/$defs/messageText" },
+          "meaning_ja": { "$ref": "#/$defs/longText" },
+          "why_it_may_be_difficult": { "$ref": "#/$defs/longText" },
+          "related_expressions": {
+            "type": "array",
+            "maxItems": 30,
+            "items": { "$ref": "#/$defs/mediumText" }
+          }
+        }
+      }
+    },
+    "expressions_for_next_session": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expression_en", "meaning_ja", "example", "priority"],
+        "properties": {
+          "expression_en": { "$ref": "#/$defs/mediumText" },
+          "meaning_ja": { "$ref": "#/$defs/mediumText" },
+          "example": { "$ref": "#/$defs/longText" },
+          "priority": { "enum": ["high", "medium", "low"] }
+        }
+      }
+    },
+    "next_session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommended_topic", "goals", "points_to_focus_on"],
+      "properties": {
+        "recommended_topic": { "$ref": "#/$defs/mediumText" },
+        "goals": {
+          "type": "array",
+          "maxItems": 30,
+          "items": { "$ref": "#/$defs/mediumText" }
+        },
+        "points_to_focus_on": {
+          "type": "array",
+          "maxItems": 30,
+          "items": { "$ref": "#/$defs/mediumText" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "shortText": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "mediumText": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "longText": {
+      "type": "string",
+      "maxLength": 10000
+    },
+    "messageText": {
+      "type": "string",
+      "maxLength": 20000
+    }
+  }
+}

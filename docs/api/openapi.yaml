@@ -1,0 +1,322 @@
+openapi: 3.1.0
+info:
+  title: Talk Craft API
+  version: 0.1.0
+  description: >-
+    Browser extension and file import boundaries for the provider-independent
+    learning application. The first UI slice uses the same application services
+    through Server Actions; not every route is implemented yet.
+servers:
+  - url: /api/v1
+security:
+  - cookieSession: []
+paths:
+  /sessions:
+    get:
+      operationId: listSessions
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/SessionStatus" }
+      responses:
+        "200":
+          description: A page of sessions owned by the current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+                  next_cursor: { type: [string, "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSession" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+  /sessions/{sessionId}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getSession
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateSession
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: { type: string, minLength: 1, maxLength: 120 }
+                objective: { type: string, minLength: 1, maxLength: 2000 }
+                reflection_notes: { type: string, maxLength: 10000 }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+    delete:
+      operationId: deleteSession
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sessions/{sessionId}/transitions:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    post:
+      operationId: transitionSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [event, expected_version]
+              properties:
+                event:
+                  enum: [prepare, start, finish_conversation, complete_review, archive]
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Transition applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /sessions/{sessionId}/imports:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    post:
+      operationId: stageImport
+      description: Stores untrusted input and returns validation preview; does not write review tables.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [format, raw_content]
+              properties:
+                format: { enum: [json, plain_text] }
+                raw_content: { type: string, maxLength: 2097152 }
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Staged import and validation preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportPreview" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+  /imports/{importId}:
+    parameters:
+      - $ref: "#/components/parameters/ImportId"
+    patch:
+      operationId: reviseImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [corrected_content, expected_version]
+              properties:
+                corrected_content: { type: string, maxLength: 2097152 }
+                expected_version: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Revalidated preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportPreview" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /imports/{importId}/commit:
+    parameters:
+      - $ref: "#/components/parameters/ImportId"
+    post:
+      operationId: commitImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_version, warnings_confirmed]
+              properties:
+                expected_version: { type: integer, minimum: 1 }
+                warnings_confirmed: { type: boolean, const: true }
+                replace_existing_ai_review: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Import committed transactionally
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/InvalidInput" }
+  /exports/me:
+    get:
+      operationId: exportCurrentUser
+      responses:
+        "200":
+          description: Portable user-owned data
+          content:
+            application/json:
+              schema: { type: object }
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: talk-craft.session_token
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ImportId:
+      name: importId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string }
+  schemas:
+    SessionStatus:
+      type: string
+      enum: [draft, ready, in_progress, awaiting_review, completed, archived]
+    ConversationType:
+      type: string
+      enum: [voice, text, mixed, unknown]
+    CreateSession:
+      type: object
+      additionalProperties: false
+      required: [title, topic, objective, conversation_type]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        topic: { type: string, minLength: 1, maxLength: 500 }
+        objective: { type: string, minLength: 1, maxLength: 2000 }
+        situation: { type: string, maxLength: 2000 }
+        ai_role: { type: string, maxLength: 500 }
+        conversation_type: { $ref: "#/components/schemas/ConversationType" }
+        provider_name: { type: string, maxLength: 200 }
+        external_conversation_url: { type: string, format: uri, maxLength: 2000 }
+        prepared_expressions:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [expression_en]
+            properties:
+              expression_en: { type: string, minLength: 1, maxLength: 1000 }
+              meaning_ja: { type: string, maxLength: 1000 }
+    Session:
+      allOf:
+        - $ref: "#/components/schemas/CreateSession"
+        - type: object
+          required: [id, status, version, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            status: { $ref: "#/components/schemas/SessionStatus" }
+            version: { type: integer, minimum: 1 }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [severity, code, path, message]
+      properties:
+        severity: { enum: [error, warning] }
+        code: { type: string }
+        path: { type: string }
+        message: { type: string }
+    ImportPreview:
+      type: object
+      required: [id, status, version, issues, can_commit]
+      properties:
+        id: { type: string, format: uuid }
+        status: { enum: [received, needs_correction, ready, committed, rejected] }
+        version: { type: integer, minimum: 1 }
+        candidate: { type: [object, "null"] }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/ValidationIssue" }
+        can_commit: { type: boolean }
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+        request_id: { type: string }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/ValidationIssue" }
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource does not exist or is not owned by the current user
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    InvalidInput:
+      description: Request could not be accepted
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Version or state conflict
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TooLarge:
+      description: Import exceeds the configured size limit
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }

@@ -1,0 +1,5 @@
+ALTER TABLE "session_expressions" ADD CONSTRAINT "session_expressions_sequence_check" CHECK ("session_expressions"."sequence" >= 0);--> statement-breakpoint
+ALTER TABLE "generated_prompts" ADD CONSTRAINT "generated_prompts_revision_check" CHECK ("generated_prompts"."revision" >= 1);--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_planned_duration_check" CHECK ("sessions"."planned_duration_minutes" is null or "sessions"."planned_duration_minutes" between 1 and 240);--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_actual_duration_check" CHECK ("sessions"."actual_duration_minutes" is null or "sessions"."actual_duration_minutes" between 1 and 1440);--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_version_check" CHECK ("sessions"."version" >= 1);
