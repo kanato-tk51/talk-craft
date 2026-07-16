@@ -6,7 +6,7 @@ import type { KeyExpression, TranscriptBlock, TranslationBlock } from "./youtube
 export const YOUTUBE_GENERATION_MODEL = "gpt-5.6-luna";
 export const YOUTUBE_STRUCTURE_REASONING = "auto";
 export const YOUTUBE_TRANSLATION_REASONING = "auto";
-export const YOUTUBE_GENERATION_CHECKPOINT_VERSION = 4;
+export const YOUTUBE_GENERATION_CHECKPOINT_VERSION = 5;
 
 const MAX_CONTEXT_CHARACTERS = 1_200;
 const MAX_AI_EXPRESSIONS = 12;
@@ -29,8 +29,14 @@ export type CompactStructureOutput = z.infer<typeof compactStructureOutputSchema
 export type CompactGlossaryEntry = CompactStructureOutput["g"][number];
 
 export const compactTranslationOutputSchema = z.object({
-  /** Japanese translations keyed by the deterministic paragraph sequence. */
-  t: z.array(z.object({ p: z.number().int(), j: z.string() })),
+  /** Japanese translations keyed by deterministic paragraph and sentence sequences. */
+  t: z.array(
+    z.object({
+      p: z.number().int(),
+      s: z.number().int(),
+      j: z.string(),
+    }),
+  ),
   /** Learning annotations. Keys are intentionally short to reduce output tokens. */
   x: z.array(
     z.object({
@@ -235,19 +241,23 @@ export function validateChunkTranslation(
   chunk: TranslationChunk,
   output: CompactTranslationOutput,
 ): void {
-  const expectedSequences = chunk.paragraphs.map((paragraph) => paragraph.sequence);
-  const actualSequences = output.t.map((translation) => translation.p);
-  const translationBySequence = new Map(
-    output.t.map((translation) => [translation.p, splitSentenceTranslations(translation.j)]),
+  const expectedPairs = chunk.paragraphs.flatMap((paragraph) =>
+    paragraph.sourceSentences.map((_, sentenceIndex) => ({
+      paragraphSequence: paragraph.sequence,
+      sentenceSequence: sentenceIndex + 1,
+    })),
   );
   if (
-    expectedSequences.length !== actualSequences.length ||
-    actualSequences.some((sequence, index) => sequence !== expectedSequences[index]) ||
-    output.t.some((translation) => !translation.j.trim()) ||
-    chunk.paragraphs.some(
-      (paragraph) =>
-        translationBySequence.get(paragraph.sequence)?.length !== paragraph.sourceSentences.length,
-    )
+    expectedPairs.length !== output.t.length ||
+    output.t.some((translation, index) => {
+      const expected = expectedPairs[index];
+      return (
+        !expected ||
+        translation.p !== expected.paragraphSequence ||
+        translation.s !== expected.sentenceSequence ||
+        !translation.j.trim()
+      );
+    })
   ) {
     throw new YoutubeGenerationValidationError(
       "AIの翻訳結果に段落・対応訳の欠落、重複、または空の訳があります。",
@@ -256,7 +266,7 @@ export function validateChunkTranslation(
   if (output.x.length > chunk.expressionBudget) {
     throw new YoutubeGenerationValidationError("AIの重要表現数が指定した上限を超えています。");
   }
-  const expectedSequenceSet = new Set(expectedSequences);
+  const expectedSequenceSet = new Set(chunk.paragraphs.map((paragraph) => paragraph.sequence));
   if (output.x.some((expression) => !expectedSequenceSet.has(expression.p))) {
     throw new YoutubeGenerationValidationError("AIの重要表現が対象外の段落を参照しています。");
   }
@@ -293,10 +303,12 @@ function mergeYoutubeTranslation(
   for (const { chunk, output } of chunks) {
     validateChunkTranslation(chunk, output);
     for (const translation of output.t) {
-      if (translationByParagraph.has(translation.p)) {
-        throw new YoutubeGenerationValidationError("AIの翻訳結果に重複した段落があります。");
+      const sentenceTranslations = translationByParagraph.get(translation.p) ?? [];
+      if (sentenceTranslations[translation.s - 1] !== undefined) {
+        throw new YoutubeGenerationValidationError("AIの翻訳結果に重複した対応訳があります。");
       }
-      translationByParagraph.set(translation.p, splitSentenceTranslations(translation.j));
+      sentenceTranslations[translation.s - 1] = translation.j.trim();
+      translationByParagraph.set(translation.p, sentenceTranslations);
     }
     for (const item of output.x) {
       const paragraph = paragraphs[item.p - 1];
@@ -424,13 +436,6 @@ export function estimateEnglishTokens(value: string): number {
   // English prose averages roughly four characters per token. A deterministic
   // estimate is sufficient here because it controls chunk size, not billing.
   return Math.max(1, Math.ceil(value.length / 4));
-}
-
-function splitSentenceTranslations(value: string): string[] {
-  return value
-    .split(/\r?\n/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
 }
 
 function joinSourceBlocks(blocks: TranscriptBlock[]): string {

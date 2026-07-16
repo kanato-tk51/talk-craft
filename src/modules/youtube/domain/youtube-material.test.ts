@@ -61,6 +61,9 @@ describe("translation prompt and response", () => {
     expect(prompt).toContain("[1] Let's get down to business.");
     expect(prompt).toContain("語形・語順を変えずそのまま抜き出してください");
     expect(prompt).toContain('"translation_paragraphs"');
+    expect(prompt).toContain('"sentence_pairs"');
+    expect(prompt).toContain('"sentence_number"');
+    expect(prompt).toContain("英語と日本語の対応関係");
   });
 
   it("allows only minimal corrections when the captions are automatic", () => {
@@ -119,15 +122,25 @@ describe("translation prompt and response", () => {
     ).toThrow(TranslationResponseError);
   });
 
-  it("accepts natural paragraphs that preserve all source text", () => {
+  it("stores explicit English and Japanese sentence pairs", () => {
     const result = parseTranslationResponse(
       JSON.stringify({
         summary_ja: "要約",
         translation_paragraphs: [
           {
             paragraph_number: 1,
-            source_en: "Let's get down to business. We need to think it through.",
-            translation_ja: "本題に入り、よく考えましょう。",
+            sentence_pairs: [
+              {
+                sentence_number: 1,
+                source_en: "Let's get down to business.",
+                translation_ja: "本題に入りましょう。",
+              },
+              {
+                sentence_number: 2,
+                source_en: "We need to think it through.",
+                translation_ja: "よく考える必要があります。",
+              },
+            ],
           },
         ],
         key_expressions: [],
@@ -139,10 +152,49 @@ describe("translation prompt and response", () => {
       {
         sequence: 1,
         sourceEn: "Let's get down to business. We need to think it through.",
-        translationJa: "本題に入り、よく考えましょう。",
+        translationJa: "本題に入りましょう。\nよく考える必要があります。",
         startMs: 0,
+        sentencePairs: [
+          {
+            sourceEn: "Let's get down to business.",
+            translationJa: "本題に入りましょう。",
+          },
+          {
+            sourceEn: "We need to think it through.",
+            translationJa: "よく考える必要があります。",
+          },
+        ],
       },
     ]);
+  });
+
+  it("rejects missing or reordered sentence numbers", () => {
+    expect(() =>
+      parseTranslationResponse(
+        JSON.stringify({
+          summary_ja: "要約",
+          translation_paragraphs: [
+            {
+              paragraph_number: 1,
+              sentence_pairs: [
+                {
+                  sentence_number: 2,
+                  source_en: "Let's get down to business.",
+                  translation_ja: "本題に入りましょう。",
+                },
+                {
+                  sentence_number: 1,
+                  source_en: "We need to think it through.",
+                  translation_ja: "よく考える必要があります。",
+                },
+              ],
+            },
+          ],
+          key_expressions: [],
+        }),
+        blocks,
+      ),
+    ).toThrow("英文番号が一致しません");
   });
 
   it("accepts a small contextual correction for automatic captions", () => {
@@ -155,8 +207,13 @@ describe("translation prompt and response", () => {
         translation_paragraphs: [
           {
             paragraph_number: 1,
-            source_en: "We use Postgres for the database.",
-            translation_ja: "データベースにはPostgresを使います。",
+            sentence_pairs: [
+              {
+                sentence_number: 1,
+                source_en: "We use Postgres for the database.",
+                translation_ja: "データベースにはPostgresを使います。",
+              },
+            ],
           },
         ],
         key_expressions: [],
@@ -176,8 +233,13 @@ describe("translation prompt and response", () => {
           translation_paragraphs: [
             {
               paragraph_number: 1,
-              source_en: "Let's start working.",
-              translation_ja: "仕事を始めましょう。",
+              sentence_pairs: [
+                {
+                  sentence_number: 1,
+                  source_en: "Let's start working.",
+                  translation_ja: "仕事を始めましょう。",
+                },
+              ],
             },
           ],
           key_expressions: [],

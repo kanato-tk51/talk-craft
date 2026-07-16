@@ -7,6 +7,7 @@ import { scheduleYoutubeGeneration } from "@/modules/youtube/application/youtube
 import { getYoutubeMaterial } from "@/modules/youtube/application/youtube-service";
 import { AnnotatedTranscript } from "@/modules/youtube/ui/annotated-transcript";
 import { DeleteYoutubeMaterialButton } from "@/modules/youtube/ui/delete-youtube-material-button";
+import { RegenerateYoutubeTranslationButton } from "@/modules/youtube/ui/regenerate-youtube-translation-button";
 import { TranslationMethodSelector } from "@/modules/youtube/ui/translation-method-selector";
 
 export const metadata: Metadata = { title: "YouTube教材" };
@@ -67,6 +68,9 @@ export default async function YoutubeMaterialDetailPage({
             <a className="text-action" href={material.sourceUrl} target="_blank" rel="noreferrer">
               YouTubeで動画を見る ↗
             </a>
+            {translated ? (
+              <RegenerateYoutubeTranslationButton materialId={material.id} title={material.title} />
+            ) : null}
             <DeleteYoutubeMaterialButton materialId={material.id} title={material.title} />
           </div>
         </div>

@@ -21,7 +21,7 @@ const chunks: TranslationChunk[] = [1, 2, 3].map((sequence) => ({
 }));
 
 function outputFor(sequence: number): CompactTranslationOutput {
-  return { t: [{ p: sequence, j: `訳${sequence}` }], x: [] };
+  return { t: [{ p: sequence, s: 1, j: `訳${sequence}` }], x: [] };
 }
 
 describe("YouTube generation checkpoints", () => {

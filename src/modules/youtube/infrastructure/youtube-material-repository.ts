@@ -197,6 +197,43 @@ export async function markYoutubeMaterialGenerationManual(
   return Boolean(updated);
 }
 
+export async function resetYoutubeMaterialTranslationForRegeneration(
+  actorUserId: string,
+  materialId: string,
+  expectedVersion: number,
+  input: {
+    translationPrompt: string;
+    keyExpressions: KeyExpression[];
+  },
+): Promise<boolean> {
+  const [updated] = await db
+    .update(youtubeMaterials)
+    .set({
+      translationPrompt: input.translationPrompt,
+      promptVersion: TRANSLATION_PROMPT_VERSION,
+      summaryJa: "",
+      translationBlocks: [],
+      keyExpressions: input.keyExpressions,
+      rawAiResponse: "",
+      generationStatus: "queued",
+      generationCheckpoint: null,
+      generationError: "",
+      translatedAt: null,
+      updatedAt: new Date(),
+      version: expectedVersion + 1,
+    })
+    .where(
+      and(
+        eq(youtubeMaterials.id, materialId),
+        eq(youtubeMaterials.userId, actorUserId),
+        eq(youtubeMaterials.version, expectedVersion),
+      ),
+    )
+    .returning({ id: youtubeMaterials.id });
+
+  return Boolean(updated);
+}
+
 export async function updateYoutubeMaterialGenerationCheckpoint(
   actorUserId: string,
   materialId: string,

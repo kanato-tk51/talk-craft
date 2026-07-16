@@ -1,9 +1,12 @@
 import { after } from "next/server";
 
 import { getCurrentActorId } from "@/modules/auth/application/current-actor";
+import { renderTranslationPrompt } from "../domain/youtube-material";
 import {
+  findYoutubeMaterialForUser,
   markYoutubeMaterialGenerationQueued,
   type QueueYoutubeGenerationResult,
+  resetYoutubeMaterialTranslationForRegeneration,
 } from "../infrastructure/youtube-material-repository";
 import { generateYoutubeMaterialTranslation } from "./youtube-generation-service";
 
@@ -23,6 +26,37 @@ export async function queueYoutubeGeneration(
     scheduleYoutubeGeneration(materialId);
   }
   return result;
+}
+
+export async function restartYoutubeGeneration(
+  materialId: string,
+): Promise<QueueYoutubeGenerationResult> {
+  const actorUserId = getCurrentActorId();
+  const material = await findYoutubeMaterialForUser(actorUserId, materialId);
+  if (!material) return "missing";
+  if (["queued", "structuring", "translating"].includes(material.generationStatus)) {
+    scheduleYoutubeGeneration(materialId);
+    return "already_running";
+  }
+
+  const reset = await resetYoutubeMaterialTranslationForRegeneration(
+    actorUserId,
+    materialId,
+    material.version,
+    {
+      translationPrompt: renderTranslationPrompt({
+        title: material.title,
+        channelName: material.channelName,
+        captionSource: material.captionSource,
+        blocks: material.transcriptBlocks,
+      }),
+      keyExpressions: material.keyExpressions.filter((expression) => expression.origin === "user"),
+    },
+  );
+  if (!reset) return "already_running";
+
+  scheduleYoutubeGeneration(materialId);
+  return "queued";
 }
 
 export function scheduleYoutubeGeneration(materialId: string): void {

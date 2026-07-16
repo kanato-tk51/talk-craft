@@ -853,21 +853,31 @@ nav a:hover {
   align-items: center;
 }
 
-.video-delete-button {
+.video-delete-button,
+.video-regenerate-button {
   padding: 0;
   border: 0;
-  color: #a6412d;
   background: transparent;
   cursor: pointer;
   font-size: 0.76rem;
   font-weight: 700;
 }
 
-.video-delete-button:hover {
+.video-regenerate-button {
+  color: var(--green);
+}
+
+.video-delete-button {
+  color: #a6412d;
+}
+
+.video-delete-button:hover,
+.video-regenerate-button:hover {
   text-decoration: underline;
 }
 
-.video-delete-button:disabled {
+.video-delete-button:disabled,
+.video-regenerate-button:disabled {
   cursor: wait;
   opacity: 0.55;
 }
@@ -1123,12 +1133,8 @@ nav a:hover {
 }
 
 .bilingual-sentence-pair p {
-  margin: 8px 0 0;
+  margin: 0;
   line-height: 1.85;
-}
-
-.bilingual-sentence-pair:not(:first-child) p {
-  margin-top: 0;
 }
 
 .expression-annotation {

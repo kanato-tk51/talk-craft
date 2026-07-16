@@ -29,6 +29,13 @@ type SelectionCandidate = {
   commentTop: number;
 };
 
+type SelectionSnapshot = {
+  anchorNode: Node | null;
+  anchorOffset: number;
+  focusNode: Node | null;
+  focusOffset: number;
+};
+
 export function AnnotatedTranscript({
   materialId,
   transcriptBlocks,
@@ -108,6 +115,7 @@ export function AnnotatedTranscript({
   }, []);
 
   function selectExpression(expressionIndex: number, annotation: HTMLElement) {
+    window.getSelection()?.removeAllRanges();
     selectedAnnotationRef.current = annotation;
     alignCommentToElement(annotation);
     setSelectionCandidate(null);
@@ -199,12 +207,20 @@ export function AnnotatedTranscript({
     function dismissSelectionToolbar() {
       setSelectionCandidate(null);
     }
+    function dismissSelectionToolbarWhenSelectionIsEmpty() {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+        setSelectionCandidate(null);
+      }
+    }
 
     window.addEventListener("resize", realignAfterResize);
     window.addEventListener("scroll", dismissSelectionToolbar, true);
+    document.addEventListener("selectionchange", dismissSelectionToolbarWhenSelectionIsEmpty);
     return () => {
       window.removeEventListener("resize", realignAfterResize);
       window.removeEventListener("scroll", dismissSelectionToolbar, true);
+      document.removeEventListener("selectionchange", dismissSelectionToolbarWhenSelectionIsEmpty);
     };
   }, [alignCommentToElement]);
 
@@ -238,13 +254,12 @@ export function AnnotatedTranscript({
                 </a>
               </div>
               <div className="bilingual-sentence-list">
-                {(sentencePairs.get(block.sequence) ?? []).map((pair, sentenceIndex) => (
+                {(sentencePairs.get(block.sequence) ?? []).map((pair) => (
                   <div
                     className="bilingual-sentence-pair"
                     key={`${block.sequence}-${pair.sourceStart}`}
                   >
                     <div lang="en">
-                      {sentenceIndex === 0 ? <small>ENGLISH</small> : null}
                       <p
                         className="annotated-source-text"
                         onMouseUp={(event) => captureSelection(event.currentTarget)}
@@ -266,7 +281,6 @@ export function AnnotatedTranscript({
                       </p>
                     </div>
                     <div lang="ja">
-                      {sentenceIndex === 0 ? <small>日本語</small> : null}
                       <p>{pair.translationJa}</p>
                     </div>
                   </div>
@@ -382,29 +396,16 @@ function buildDisplaySentencePairs(
   const savedDisplayPairs = savedPairs ? locateSavedSentencePairs(sourceText, savedPairs) : null;
   if (savedDisplayPairs) return savedDisplayPairs;
 
-  const sourceSentences = segmentSentences(sourceText, "en");
-  if (!sourceSentences.length) return [];
-
   const translationText = translationBlock?.translationJa.trim() ?? "";
-  const explicitLines = translationText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const translatedSentences =
-    explicitLines.length > 1
-      ? explicitLines
-      : segmentSentences(translationText, "ja").map((sentence) => sentence.text);
-  const distributedTranslations = distributeTranslations(
-    translatedSentences,
-    sourceSentences.length,
-  );
-
-  return sourceSentences.map((source, index) => ({
-    sourceEn: source.text,
-    translationJa: distributedTranslations[index] || (index === 0 ? "訳がありません" : ""),
-    sourceStart: source.start,
-    sourceEnd: source.end,
-  }));
+  if (!sourceText.trim()) return [];
+  return [
+    {
+      sourceEn: sourceText,
+      translationJa: translationText || "訳がありません",
+      sourceStart: 0,
+      sourceEnd: sourceText.length,
+    },
+  ];
 }
 
 function locateSavedSentencePairs(
@@ -415,7 +416,7 @@ function locateSavedSentencePairs(
   let cursor = 0;
   for (const pair of savedPairs) {
     const sourceStart = sourceText.indexOf(pair.sourceEn, cursor);
-    if (sourceStart < 0) return null;
+    if (sourceStart < 0 || sourceText.slice(cursor, sourceStart).trim()) return null;
     const sourceEnd = sourceStart + pair.sourceEn.length;
     displayPairs.push({
       sourceEn: pair.sourceEn,
@@ -425,34 +426,7 @@ function locateSavedSentencePairs(
     });
     cursor = sourceEnd;
   }
-  return displayPairs.length ? displayPairs : null;
-}
-
-function segmentSentences(value: string, locale: "en" | "ja") {
-  if (!value.trim()) return [];
-  return [...new Intl.Segmenter(locale, { granularity: "sentence" }).segment(value)].flatMap(
-    (segment) => {
-      const leadingWhitespace = segment.segment.length - segment.segment.trimStart().length;
-      const text = segment.segment.trim();
-      if (!text) return [];
-      const start = segment.index + leadingWhitespace;
-      return [{ text, start, end: start + text.length }];
-    },
-  );
-}
-
-function distributeTranslations(translations: string[], sourceCount: number): string[] {
-  const distributed = Array.from({ length: sourceCount }, () => [] as string[]);
-  if (!sourceCount || !translations.length) return distributed.map(() => "");
-
-  translations.forEach((translation, index) => {
-    const targetIndex = Math.min(
-      sourceCount - 1,
-      Math.floor((index * sourceCount) / translations.length),
-    );
-    distributed[targetIndex]?.push(translation);
-  });
-  return distributed.map((items) => items.join(""));
+  return displayPairs.length && !sourceText.slice(cursor).trim() ? displayPairs : null;
 }
 
 function rangesWithinSentence(
@@ -480,6 +454,8 @@ function HighlightedEnglish({
   selectedExpressionIndex: number | null;
   onSelect: (expressionIndex: number, annotation: HTMLElement) => void;
 }) {
+  const selectionAtPointerDownRef = useRef<SelectionSnapshot | null>(null);
+
   if (!ranges.length) return text;
 
   const content: React.ReactNode[] = [];
@@ -495,8 +471,17 @@ function HighlightedEnglish({
         className={`expression-annotation ${selectedExpressionIndex === range.expressionIndex ? "is-active" : ""}`}
         role="button"
         tabIndex={0}
+        onPointerDown={() => {
+          selectionAtPointerDownRef.current = snapshotSelection(window.getSelection());
+        }}
         onClick={(event) => {
-          if (!window.getSelection()?.isCollapsed) return;
+          const selection = window.getSelection();
+          const selectionExistedBeforeClick = matchesSelectionSnapshot(
+            selection,
+            selectionAtPointerDownRef.current,
+          );
+          selectionAtPointerDownRef.current = null;
+          if (selection && !selection.isCollapsed && !selectionExistedBeforeClick) return;
           onSelect(range.expressionIndex, event.currentTarget);
         }}
         onKeyDown={(event) => {
@@ -518,6 +503,31 @@ function HighlightedEnglish({
     content.push(<Fragment key={`text-${cursor}`}>{text.slice(cursor)}</Fragment>);
   }
   return content;
+}
+
+function snapshotSelection(selection: Selection | null): SelectionSnapshot | null {
+  if (!selection || selection.isCollapsed) return null;
+  return {
+    anchorNode: selection.anchorNode,
+    anchorOffset: selection.anchorOffset,
+    focusNode: selection.focusNode,
+    focusOffset: selection.focusOffset,
+  };
+}
+
+function matchesSelectionSnapshot(
+  selection: Selection | null,
+  snapshot: SelectionSnapshot | null,
+): boolean {
+  return Boolean(
+    selection &&
+      !selection.isCollapsed &&
+      snapshot &&
+      selection.anchorNode === snapshot.anchorNode &&
+      selection.anchorOffset === snapshot.anchorOffset &&
+      selection.focusNode === snapshot.focusNode &&
+      selection.focusOffset === snapshot.focusOffset,
+  );
 }
 
 function ExpressionComment({

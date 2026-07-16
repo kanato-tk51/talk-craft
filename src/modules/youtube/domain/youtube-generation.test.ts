@@ -106,7 +106,21 @@ describe("YouTube AI generation merge", () => {
     if (!chunk) throw new Error("test chunk was not created");
     expect(() =>
       validateChunkTranslation(chunk, {
-        t: [{ p: 1, j: "本題に入りましょう。" }],
+        t: [{ p: 1, s: 1, j: "本題に入りましょう。" }],
+        x: [],
+      }),
+    ).toThrow("対応訳の欠落");
+  });
+
+  it("rejects reordered sentence IDs even when every translation is present", () => {
+    const [chunk] = buildTranslationChunks(buildParagraphPlan(sourceBlocks, [2, 4]));
+    if (!chunk) throw new Error("test chunk was not created");
+    expect(() =>
+      validateChunkTranslation(chunk, {
+        t: [
+          { p: 1, s: 2, j: "まず、明確な計画を立てる必要があります。" },
+          { p: 1, s: 1, j: "本題に入りましょう。" },
+        ],
         x: [],
       }),
     ).toThrow("対応訳の欠落");
@@ -125,10 +139,8 @@ describe("YouTube AI generation merge", () => {
         chunk: firstChunk,
         output: {
           t: [
-            {
-              p: 1,
-              j: "本題に入りましょう。\nまず、明確な計画を立てる必要があります。",
-            },
+            { p: 1, s: 1, j: "本題に入りましょう。" },
+            { p: 1, s: 2, j: "まず、明確な計画を立てる必要があります。" },
           ],
           x: [],
         },
@@ -137,10 +149,8 @@ describe("YouTube AI generation merge", () => {
         chunk: secondChunk,
         output: {
           t: [
-            {
-              p: 2,
-              j: "では、別の例を見てみましょう。\nそれは、よく考える助けになります。",
-            },
+            { p: 2, s: 1, j: "では、別の例を見てみましょう。" },
+            { p: 2, s: 2, j: "それは、よく考える助けになります。" },
           ],
           x: [
             {
@@ -193,7 +203,10 @@ describe("YouTube AI generation merge", () => {
       expressionBudget: 6,
     };
     const output = {
-      t: [{ p: 1, j: "本題に入ります。\n明確な計画を立てます。" }],
+      t: [
+        { p: 1, s: 1, j: "本題に入ります。" },
+        { p: 1, s: 2, j: "明確な計画を立てます。" },
+      ],
       x: [],
     };
 
@@ -213,7 +226,10 @@ describe("YouTube AI generation merge", () => {
     const paragraphs = buildParagraphPlan(sourceBlocks, structure.e);
     const chunks = buildTranslationChunks(paragraphs);
     const output = {
-      t: [{ p: 1, j: "本題に入ります。\n明確な計画を立てます。" }],
+      t: [
+        { p: 1, s: 1, j: "本題に入ります。" },
+        { p: 1, s: 2, j: "明確な計画を立てます。" },
+      ],
       x: [],
     };
     const checkpoint = createYoutubeGenerationCheckpoint(structure, chunks, new Map([[0, output]]));

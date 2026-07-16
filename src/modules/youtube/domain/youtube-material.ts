@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const MAX_TRANSCRIPT_CHARACTERS = 200_000;
 export const MAX_AI_RESPONSE_CHARACTERS = 1_000_000;
-export const TRANSLATION_PROMPT_VERSION = "4.0";
+export const TRANSLATION_PROMPT_VERSION = "5.0";
 
 export type YoutubeCaptionSource = "creator" | "automatic";
 
@@ -57,10 +57,21 @@ const legacyTranslationBlockSchema = z.object({
   translation_ja: z.string().trim().min(1).max(5_000),
 });
 
-const translationParagraphSchema = z.object({
+const legacyTranslationParagraphSchema = z.object({
   paragraph_number: z.number().int().positive(),
   source_en: z.string().trim().min(1).max(20_000),
   translation_ja: z.string().trim().min(1).max(20_000),
+});
+
+const translationSentencePairSchema = z.object({
+  sentence_number: z.number().int().positive(),
+  source_en: z.string().trim().min(1).max(5_000),
+  translation_ja: z.string().trim().min(1).max(5_000),
+});
+
+const translationParagraphSchema = z.object({
+  paragraph_number: z.number().int().positive(),
+  sentence_pairs: z.array(translationSentencePairSchema).min(1).max(500),
 });
 
 const keyExpressionSchema = z.object({
@@ -74,6 +85,12 @@ const keyExpressionSchema = z.object({
 export const translationResponseSchema = z.object({
   summary_ja: z.string().trim().min(1).max(10_000),
   translation_paragraphs: z.array(translationParagraphSchema).min(1).max(1_000),
+  key_expressions: z.array(keyExpressionSchema).max(30).default([]),
+});
+
+const legacyParagraphTranslationResponseSchema = z.object({
+  summary_ja: z.string().trim().min(1).max(10_000),
+  translation_paragraphs: z.array(legacyTranslationParagraphSchema).min(1).max(1_000),
   key_expressions: z.array(keyExpressionSchema).max(30).default([]),
 });
 
@@ -186,8 +203,8 @@ export function renderTranslationPrompt(input: {
 - すべての原文を順番どおり一度ずつ使い、段落間で省略・重複させないでください。`;
   const sourceDescription =
     input.captionSource === "automatic"
-      ? "自然な段落に組み直した英語字幕（明らかな自動認識ミスのみ最小限の補正可）"
-      : "自然な段落に組み直した英語原文（文字は変更しない）";
+      ? "文末まで完結した1つの英文（明らかな自動認識ミスのみ最小限の補正可）"
+      : "文末まで完結した1つの英文（文字は変更しない）";
 
   return `あなたは英語学習教材の編集者です。以下はYouTube動画から取得した英語字幕です。自然で正確な日本語に翻訳し、英語学習者が覚える価値のある表現も抽出してください。
 
@@ -201,6 +218,9 @@ export function renderTranslationPrompt(input: {
 - [番号] は字幕の取得単位であり、表示用の段落ではありません。すべての原文を順番どおり一度ずつ使いながら、話題・文意・話者の流れが自然になる位置で段落を組み直してください。
 ${captionGuidance}
 - 段落の文数・行数・文字数に固定の目安を設けないでください。話題・主張・例示・話者・場面・論理展開が自然に切り替わる位置だけで区切り、字幕の途中で文が切れている場合は文が完結するところまで同じ段落にまとめてください。
+- 各段落のsentence_pairsには、英語1文とその日本語訳を1組ずつ入れてください。source_enは必ず文末まで完結した1つの英文にし、複数の英文をまとめたり、1つの英文を複数要素に分けたりしないでください。
+- sentence_numberは段落ごとに1から始め、英語原文に現れる順序で1ずつ増やしてください。この番号が英語と日本語の対応関係を表します。
+- 各translation_jaには同じ要素のsource_enだけを訳し、前後の英文の内容を混ぜないでください。
 - 固有名詞、数値、話者の意図を保ちつつ、読みやすい日本語にしてください。
 - 重要表現は、汎用性が高い句動詞・慣用表現・自然な言い回しを最大12件選んでください。
 - 各 expression_en は、対応する source_en に実際に登場する連続した文字列を、語形・語順を変えずそのまま抜き出してください。本文上で強調表示するため、要約や言い換えは禁止です。
@@ -211,8 +231,13 @@ ${captionGuidance}
   "translation_paragraphs": [
     {
       "paragraph_number": 1,
-      "source_en": "${sourceDescription}",
-      "translation_ja": "その段落の日本語訳"
+      "sentence_pairs": [
+        {
+          "sentence_number": 1,
+          "source_en": "${sourceDescription}",
+          "translation_ja": "この英文だけに対応する日本語訳"
+        }
+      ]
     }
   ],
   "key_expressions": [
@@ -258,7 +283,12 @@ export function parseTranslationResponse(
 
   const parsed = translationResponseSchema.safeParse(unknownValue);
   if (parsed.success) {
-    return parseParagraphResponse(parsed.data, sourceBlocks, captionSource);
+    return parseSentencePairResponse(parsed.data, sourceBlocks, captionSource);
+  }
+
+  const legacyParagraphParsed = legacyParagraphTranslationResponseSchema.safeParse(unknownValue);
+  if (legacyParagraphParsed.success) {
+    return parseParagraphResponse(legacyParagraphParsed.data, sourceBlocks, captionSource);
   }
 
   const legacyParsed = legacyTranslationResponseSchema.safeParse(unknownValue);
@@ -271,24 +301,88 @@ export function parseTranslationResponse(
   return parseLegacyResponse(legacyParsed.data, sourceBlocks);
 }
 
-function parseParagraphResponse(
+function parseSentencePairResponse(
   data: z.infer<typeof translationResponseSchema>,
   sourceBlocks: TranscriptBlock[],
   captionSource: YoutubeCaptionSource,
 ): ParsedTranslationResponse {
   const paragraphs = data.translation_paragraphs;
+  assertSequentialParagraphs(paragraphs);
+  for (const paragraph of paragraphs) {
+    if (
+      paragraph.sentence_pairs.some((sentence, index) => sentence.sentence_number !== index + 1)
+    ) {
+      throw new TranslationResponseError(
+        `段落${paragraph.paragraph_number}の英文番号が一致しません。1から順番どおりにしてください。`,
+      );
+    }
+  }
+
+  const paragraphSources = paragraphs.map((paragraph) =>
+    paragraph.sentence_pairs.map((sentence) => sentence.source_en).join(" "),
+  );
+  assertSourceMatchesTranscript(paragraphSources, sourceBlocks, captionSource);
+  const startTimes = paragraphStartTimes(paragraphSources, sourceBlocks);
+
+  return {
+    summaryJa: data.summary_ja,
+    translationBlocks: paragraphs.map((paragraph, index) => {
+      const sentencePairs = paragraph.sentence_pairs.map((sentence) => ({
+        sourceEn: sentence.source_en,
+        translationJa: sentence.translation_ja,
+      }));
+      return {
+        sequence: paragraph.paragraph_number,
+        sourceEn: paragraphSources[index] ?? "",
+        translationJa: sentencePairs.map((pair) => pair.translationJa).join("\n"),
+        startMs: startTimes[index],
+        sentencePairs,
+      };
+    }),
+    keyExpressions: normalizeAiKeyExpressions(data.key_expressions),
+  };
+}
+
+function parseParagraphResponse(
+  data: z.infer<typeof legacyParagraphTranslationResponseSchema>,
+  sourceBlocks: TranscriptBlock[],
+  captionSource: YoutubeCaptionSource,
+): ParsedTranslationResponse {
+  const paragraphs = data.translation_paragraphs;
+  assertSequentialParagraphs(paragraphs);
+  const paragraphSources = paragraphs.map((paragraph) => paragraph.source_en);
+  assertSourceMatchesTranscript(paragraphSources, sourceBlocks, captionSource);
+  const startTimes = paragraphStartTimes(paragraphSources, sourceBlocks);
+
+  return {
+    summaryJa: data.summary_ja,
+    translationBlocks: paragraphs.map((paragraph, index) => ({
+      sequence: paragraph.paragraph_number,
+      sourceEn: paragraph.source_en,
+      translationJa: paragraph.translation_ja,
+      startMs: startTimes[index],
+    })),
+    keyExpressions: normalizeAiKeyExpressions(data.key_expressions),
+  };
+}
+
+function assertSequentialParagraphs(paragraphs: Array<{ paragraph_number: number }>): void {
   if (paragraphs.some((paragraph, index) => paragraph.paragraph_number !== index + 1)) {
     throw new TranslationResponseError(
       `段落番号が一致しません。1から${paragraphs.length}まで順番どおりにしてください。`,
     );
   }
+}
 
+function assertSourceMatchesTranscript(
+  paragraphSources: string[],
+  sourceBlocks: TranscriptBlock[],
+  captionSource: YoutubeCaptionSource,
+): void {
   const originalText = normalizeTranscriptForComparison(
     sourceBlocks.map((block) => block.text).join(" "),
   );
-  const paragraphText = normalizeTranscriptForComparison(
-    paragraphs.map((paragraph) => paragraph.source_en).join(" "),
-  );
+  const paragraphText = normalizeTranscriptForComparison(paragraphSources.join(" "));
   const sourceIsValid =
     captionSource === "automatic"
       ? isPlausibleAutomaticCaptionCorrection(originalText, paragraphText)
@@ -300,18 +394,6 @@ function parseParagraphResponse(
         : "段落内の英語原文が字幕と一致しません。原文を変更・省略せず、段落の区切りだけを調整してください。",
     );
   }
-
-  const startTimes = paragraphStartTimes(paragraphs, sourceBlocks);
-  return {
-    summaryJa: data.summary_ja,
-    translationBlocks: paragraphs.map((paragraph, index) => ({
-      sequence: paragraph.paragraph_number,
-      sourceEn: paragraph.source_en,
-      translationJa: paragraph.translation_ja,
-      startMs: startTimes[index],
-    })),
-    keyExpressions: normalizeAiKeyExpressions(data.key_expressions),
-  };
 }
 
 function parseLegacyResponse(
@@ -362,7 +444,7 @@ function normalizeAiKeyExpressions(items: z.infer<typeof keyExpressionSchema>[])
 }
 
 function paragraphStartTimes(
-  paragraphs: z.infer<typeof translationParagraphSchema>[],
+  paragraphSources: string[],
   sourceBlocks: TranscriptBlock[],
 ): number[] {
   const blockSpans: Array<{ start: number; end: number; startMs: number }> = [];
@@ -378,11 +460,11 @@ function paragraphStartTimes(
   }
 
   let paragraphCursor = 0;
-  return paragraphs.map((paragraph) => {
+  return paragraphSources.map((paragraphSource) => {
     const containingBlock =
       blockSpans.find((span) => paragraphCursor >= span.start && paragraphCursor < span.end) ??
       blockSpans.at(-1);
-    paragraphCursor += normalizeTranscriptForComparison(paragraph.source_en).length + 1;
+    paragraphCursor += normalizeTranscriptForComparison(paragraphSource).length + 1;
     return containingBlock?.startMs ?? 0;
   });
 }
