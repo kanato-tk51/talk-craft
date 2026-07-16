@@ -1,6 +1,6 @@
 # Talk Craft プロダクト・技術設計
 
-Status: Accepted for MVP / 2026-07-14
+Status: Accepted for MVP / Updated 2026-07-15
 
 この文書は、実装前に確定させる設計判断と、MVPを実装可能な単位へ分解した計画をまとめる。中心となる原則は「学習記録はTalk Craftに属し、外部AIサービスは交換可能な実践チャネルである」こととする。
 
@@ -43,7 +43,7 @@ MVPは次の5つの利用可能な縦切りに分ける。
 4. 復習: 要約、会話、修正、聞き取り、言えなかった内容、自己メモの閲覧・編集。
 5. 継続: 次回表現をライブラリへ登録し、新規セッションへ引き継ぐ。過去セッションと表現を一覧できる。
 
-公開MVPまでに認証、所有者認可、データ削除・JSONエクスポートを追加する。リアルタイム音声、外部API、ブラウザ拡張は対象外とする。
+公開MVPまでに認証、所有者認可、データ削除・JSONエクスポートを追加する。YouTube教材以外の外部API連携、リアルタイム音声、ブラウザ拡張は対象外とする。
 
 ## 3. 推奨技術スタック
 
@@ -419,6 +419,30 @@ npm run build
 
 DBを作り直す場合は、ローカルデータが消えることを確認してから `docker compose down -v`、`docker compose up -d db`、migration、seedの順に実行する。migrationは `npm run db:generate` で生成し、SQLをreviewしてからcommitする。本番で `db:push` は使わない。
 
+## 22. YouTube字幕教材（2026-07-15追加）
+
+### 利用フロー
+
+1. `/youtube/new` でYouTube URLを受け取り、動画IDを許可したYouTube URL形式からのみ抽出する。
+2. サーバー側で公開動画情報と英語字幕を取得する。投稿者作成の英語字幕を優先し、存在しない場合のみ自動生成字幕を選ぶ。字幕キューは翻訳依頼用の番号付きソース単位へまとめるが、この番号を画面の段落境界には使用しない。
+3. サーバー側のResponses APIから `gpt-5.6-luna` を呼び出す。第1段階は字幕全体をreasoning autoで解析し、短い要約、自然な段落の終了字幕ID、必要最小限の統一用語だけをStructured Outputsで取得する。段落の文数・行数・文字数は指定しない。Talk Craft上の `auto` はAPIへreasoning effortを送らず、モデル既定に任せることを意味する。
+4. 第2段階もreasoning autoとし、第1段階で確定した意味段落ごとに前後文脈を添え、最大3並列のバッチ処理で日本語訳と動画全体で最大12件の重要表現を生成する。
+5. 出力コストを抑えるため、AIは英語原文、段落開始ID、時刻を返さない。Talk Craftが段落終了IDから原文・開始ID・時刻を決定論的に復元する。翻訳段落の欠落・重複・順序、表現数、表現の参照段落、引用の原文一致を検証し、不正な表現は保存しない。意味検証に失敗したチャンクだけ1回再試行する。段落構造の確定時と各翻訳チャンクの完了時にチェックポイントをDBへ保存し、中断後の再実行では検証済みチャンクを再利用する。旧手動JSON形式は保存済みデータとの互換用パーサーとして残す。
+6. 詳細画面ではAIが構成した段落単位で英語原文と日本語訳を同じ行に表示する。重要表現は通常文と同じ折り返し規則を持つ赤色・下線付きのインライン注釈とし、クリック時に右側のコメントパネルで意味・ニュアンス・例文を参照できるようにする。狭い画面では同じ情報を画面下部のパネルに表示する。
+7. ユーザーは英語原文内をドラッグ選択し、任意の文字列を重要表現として追加できる。追加時は原文との一致、重複、所有者、更新versionを検証し、AI翻訳を登録し直してもユーザー追加表現を保持する。
+8. 詳細画面では `youtube-nocookie.com` の埋め込みプレーヤーを表示し、ページを離れずに動画を再生できるようにする。投稿者が埋め込みを禁止した動画にはYouTube本体へのリンクを代替導線として残す。
+9. 所有するYouTube教材は確認ダイアログを経て削除できる。削除対象は `user_id` でスコープし、教材行に含まれる字幕・翻訳・重要表現・AI原文を一括削除した後、教材一覧へ戻す。
+
+### 保存モデル
+
+`youtube_materials` はユーザーとYouTube動画IDの組をuniqueとし、動画メタデータ、字幕原文、番号付きソースブロック、互換用プロンプトとversion、日本語要約、アプリが復元した英語段落とAIの日本語訳、AI／ユーザー由来の重要表現、監査用のコンパクトなAI出力を保持する。生成途中の `generation_status`、検証済み構造・チャンクを持つ `generation_checkpoint`、再試行時に表示する `generation_error` も保存する。更新競合用の `version` と翻訳完了を示す `translated_at` を持ち、ユーザー削除時はcascadeする。
+
+### 外部仕様と制約
+
+YouTube Data APIの `captions.download` は動画を編集できるユーザーの認可を必要とするため、任意の公開動画を対象にする本機能では利用できない。公開ページと非公式の字幕取得インターフェースを利用するため、YouTube側の変更、レート制限、Bot判定により取得できなくなる可能性がある。取得失敗は空字幕として保存せず、ユーザーに再試行可能なエラーとして返す。動画IDから組み立てたURLとYouTubeドメインの字幕URL以外へアクセスせず、SSRFを避ける。
+
+OpenAI APIキーはサーバー側の `OPENAI_API_KEY` だけから読み取り、クライアントバンドル、HTML、ログ、DBへ保存しない。字幕本文とモデル出力もアプリケーションログへ書き込まない。
+
 ## 実装開始前の明示事項
 
 ### 採用する技術と採用理由
@@ -469,3 +493,4 @@ Next.js/TypeScriptのモジュラーモノリス、PostgreSQL、Drizzle、Zodを
 - Drizzle ORM overview: https://orm.drizzle.team/docs/overview
 - Zod: https://zod.dev/
 - Better Auth introduction / Next.js / Drizzle: https://better-auth.com/docs/introduction, https://better-auth.com/docs/integrations/next, https://better-auth.com/docs/adapters/drizzle
+- YouTube Captions list / download: https://developers.google.com/youtube/v3/docs/captions/list, https://developers.google.com/youtube/v3/docs/captions/download

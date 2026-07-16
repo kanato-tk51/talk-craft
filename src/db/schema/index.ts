@@ -3,3 +3,4 @@ export * from "./prompts";
 export * from "./providers";
 export * from "./sessions";
 export * from "./users";
+export * from "./youtube-materials";
