@@ -8,6 +8,7 @@ import {
   parseTranslationResponse,
   removeKeyExpression,
   renderTranslationPrompt,
+  reviseTranscriptBlocks,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
   type YoutubeTranscriptSource,
@@ -19,6 +20,7 @@ import {
   findYoutubeMaterialsForUser,
   insertYoutubeMaterial,
   updateYoutubeMaterialKeyExpressions,
+  updateYoutubeMaterialTranscript,
   updateYoutubeMaterialTranslation,
 } from "../infrastructure/youtube-material-repository";
 
@@ -121,6 +123,32 @@ export async function saveYoutubeTranslation(materialId: string, rawAiResponse: 
       ),
     ],
     rawAiResponse,
+  });
+}
+
+export async function updateYoutubeTranscript(
+  materialId: string,
+  blockTexts: ReadonlyMap<number, string>,
+) {
+  const actorUserId = await getCurrentActorId();
+  const material = await findYoutubeMaterialForUser(actorUserId, materialId);
+  if (!material) {
+    return false;
+  }
+
+  const transcriptBlocks = reviseTranscriptBlocks(material.transcriptBlocks, blockTexts);
+  const transcriptText = buildTranscriptText(transcriptBlocks);
+  const translationPrompt = renderTranslationPrompt({
+    title: material.title,
+    channelName: material.channelName,
+    captionSource: material.captionSource,
+    blocks: transcriptBlocks,
+  });
+
+  return updateYoutubeMaterialTranscript(actorUserId, materialId, material.version, {
+    transcriptBlocks,
+    transcriptText,
+    translationPrompt,
   });
 }
 

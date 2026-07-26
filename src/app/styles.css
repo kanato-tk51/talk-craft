@@ -356,6 +356,17 @@ nav a:hover {
   border-left: 4px solid var(--orange);
   background: #fae8e2;
 }
+.transcript-edit-warning {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  border-left: 4px solid var(--orange);
+  background: #fae8e2;
+  font-size: 0.86rem;
+}
+.transcript-edit-warning span {
+  color: var(--muted);
+}
 .success-summary {
   padding: 14px 17px;
   border-left: 4px solid var(--green);
@@ -1247,6 +1258,51 @@ nav a:hover {
   border: 0;
 }
 
+.transcript-edit-list {
+  display: grid;
+  gap: 18px;
+}
+
+.transcript-edit-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.transcript-edit-time {
+  padding-top: 12px;
+  color: var(--green);
+  font:
+    700 0.78rem / 1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-decoration: none;
+}
+
+.transcript-edit-time:hover {
+  text-decoration: underline;
+}
+
+.transcript-edit-row textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 12px 14px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  background: #f9f7f0;
+  color: var(--ink);
+  font-size: 0.91rem;
+  line-height: 1.65;
+}
+
+.transcript-edit-row textarea:focus {
+  border-color: var(--green);
+  outline: 2px solid rgb(31 91 73 / 18%);
+  outline-offset: 1px;
+}
+
 .youtube-workflow {
   margin-top: 64px;
 }
@@ -1563,6 +1619,13 @@ code {
   }
   .translation-import-form .button {
     width: 100%;
+  }
+  .transcript-edit-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .transcript-edit-time {
+    padding-top: 0;
   }
   .expression-association,
   .expression-association form,

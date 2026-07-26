@@ -59,6 +59,9 @@ export default async function YoutubeMaterialDetailPage({
             <a className="text-action" href={material.sourceUrl} target="_blank" rel="noreferrer">
               YouTubeで動画を見る ↗
             </a>
+            <Link className="text-action" href={`/youtube/${material.id}/transcript/edit`}>
+              英語字幕を編集
+            </Link>
             <DeleteYoutubeMaterialButton materialId={material.id} title={material.title} />
           </div>
         </div>

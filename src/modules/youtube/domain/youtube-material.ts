@@ -59,6 +59,13 @@ export class PastedTranscriptError extends Error {
   }
 }
 
+export class TranscriptEditError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TranscriptEditError";
+  }
+}
+
 const legacyTranslationBlockSchema = z.object({
   segment_number: z.number().int().positive(),
   translation_ja: z.string().trim().min(1).max(5_000),
@@ -244,6 +251,40 @@ export function parsePastedYoutubeTranscript(input: string): TranscriptCue[] {
     ...cue,
     durationMs: Math.max(1_000, (cues[index + 1]?.startMs ?? cue.startMs + 3_000) - cue.startMs),
   }));
+}
+
+export function reviseTranscriptBlocks(
+  blocks: TranscriptBlock[],
+  blockTexts: ReadonlyMap<number, string>,
+): TranscriptBlock[] {
+  if (blockTexts.size !== blocks.length) {
+    throw new TranscriptEditError(
+      "字幕の件数が一致しません。画面を再読み込みしてから編集し直してください。",
+    );
+  }
+
+  let totalCharacters = 0;
+  const revisedBlocks = blocks.map((block) => {
+    const inputText = blockTexts.get(block.sequence);
+    if (inputText === undefined) {
+      throw new TranscriptEditError(
+        "字幕の件数が一致しません。画面を再読み込みしてから編集し直してください。",
+      );
+    }
+
+    const text = normalizeCaptionText(inputText);
+    if (!text) {
+      throw new TranscriptEditError(`${block.sequence}番目の英語字幕を入力してください。`);
+    }
+    totalCharacters += text.length;
+    if (totalCharacters > MAX_TRANSCRIPT_CHARACTERS) {
+      throw new TranscriptEditError("字幕が長すぎます。現在は約20万文字まで対応しています。");
+    }
+
+    return { ...block, text };
+  });
+
+  return revisedBlocks;
 }
 
 export function buildTranscriptBlocks(cues: TranscriptCue[]): TranscriptBlock[] {
