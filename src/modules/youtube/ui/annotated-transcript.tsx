@@ -13,7 +13,10 @@ import {
   useTransition,
 } from "react";
 
-import { addKeyExpressionAction } from "@/app/youtube/[materialId]/actions";
+import {
+  addKeyExpressionAction,
+  deleteKeyExpressionAction,
+} from "@/app/youtube/[materialId]/actions";
 import { type ExpressionRange, findExpressionRanges } from "../domain/expression-annotations";
 import type {
   KeyExpression,
@@ -54,8 +57,10 @@ export function AnnotatedTranscript({
   const [selectionCandidate, setSelectionCandidate] = useState<SelectionCandidate | null>(null);
   const [registrationDraft, setRegistrationDraft] = useState<UserKeyExpressionInput | null>(null);
   const [registrationError, setRegistrationError] = useState("");
+  const [deletionError, setDeletionError] = useState("");
   const [commentTop, setCommentTop] = useState(36);
   const [savingExpression, startSavingExpression] = useTransition();
+  const [deletingExpression, startDeletingExpression] = useTransition();
   const layoutRef = useRef<HTMLDivElement>(null);
   const selectedAnnotationRef = useRef<HTMLElement>(null);
 
@@ -116,11 +121,21 @@ export function AnnotatedTranscript({
 
   function selectExpression(expressionIndex: number, annotation: HTMLElement) {
     window.getSelection()?.removeAllRanges();
+    if (
+      selectedExpressionIndex === expressionIndex &&
+      selectedAnnotationRef.current === annotation
+    ) {
+      selectedAnnotationRef.current = null;
+      setSelectedExpressionIndex(null);
+      setDeletionError("");
+      return;
+    }
     selectedAnnotationRef.current = annotation;
     alignCommentToElement(annotation);
     setSelectionCandidate(null);
     setRegistrationDraft(null);
     setRegistrationError("");
+    setDeletionError("");
     setSelectedExpressionIndex(expressionIndex);
   }
 
@@ -198,6 +213,24 @@ export function AnnotatedTranscript({
     });
   }
 
+  function deleteSelectedExpression() {
+    if (!selectedExpression) return;
+    const expressionEn = selectedExpression.expressionEn;
+    if (!window.confirm(`「${expressionEn}」を削除しますか？`)) return;
+
+    setDeletionError("");
+    startDeletingExpression(async () => {
+      const result = await deleteKeyExpressionAction(materialId, expressionEn);
+      if (!result.success) {
+        setDeletionError(result.message);
+        return;
+      }
+      selectedAnnotationRef.current = null;
+      setSelectedExpressionIndex(null);
+      router.refresh();
+    });
+  }
+
   useEffect(() => {
     function realignAfterResize() {
       if (selectedAnnotationRef.current) {
@@ -231,7 +264,7 @@ export function AnnotatedTranscript({
           <div className="eyebrow">TRANSCRIPT & TRANSLATION</div>
           <h2>英語原文と日本語訳</h2>
           <p className="annotation-help">
-            赤い下線の表現はクリックして解説を確認できます。原文を選択すると、自分でも重要表現を追加できます。
+            赤い下線の表現はクリックして解説を開閉できます。登録された表現は、解説パネルで削除できます。
           </p>
         </div>
         <span>
@@ -300,9 +333,13 @@ export function AnnotatedTranscript({
             <ExpressionComment
               expression={selectedExpression}
               expressionIndex={selectedExpressionIndex}
+              deletionError={deletionError}
+              deleting={deletingExpression}
+              onDelete={deleteSelectedExpression}
               onClose={() => {
                 selectedAnnotationRef.current = null;
                 setSelectedExpressionIndex(null);
+                setDeletionError("");
               }}
             />
           ) : null}
@@ -533,10 +570,16 @@ function matchesSelectionSnapshot(
 function ExpressionComment({
   expression,
   expressionIndex,
+  deletionError,
+  deleting,
+  onDelete,
   onClose,
 }: {
   expression: KeyExpression;
   expressionIndex: number;
+  deletionError: string;
+  deleting: boolean;
+  onDelete: () => void;
   onClose: () => void;
 }) {
   return (
@@ -561,6 +604,16 @@ function ExpressionComment({
           <small>{expression.exampleJa}</small>
         </div>
       ) : null}
+      {deletionError ? (
+        <p className="expression-delete-error" role="alert">
+          {deletionError}
+        </p>
+      ) : null}
+      <div className="expression-delete-actions">
+        <button type="button" onClick={onDelete} disabled={deleting}>
+          {deleting ? "削除しています…" : "この表現を削除"}
+        </button>
+      </div>
     </div>
   );
 }
