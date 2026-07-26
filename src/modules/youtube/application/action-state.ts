@@ -17,3 +17,7 @@ export type YoutubeImportActionState = {
 export type TranslationImportActionState = {
   message: string;
 };
+
+export type TranscriptEditActionState = {
+  message: string;
+};

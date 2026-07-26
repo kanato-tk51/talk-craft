@@ -9,7 +9,9 @@ import {
   parseTranslationResponse,
   removeKeyExpression,
   renderTranslationPrompt,
+  reviseTranscriptBlocks,
   type TranscriptBlock,
+  TranscriptEditError,
   TranslationResponseError,
 } from "./youtube-material";
 
@@ -43,6 +45,43 @@ describe("buildTranscriptBlocks", () => {
       { sequence: 1, startMs: 0, text: "Hello world!" },
       { sequence: 2, startMs: 50_000, text: "A new point." },
     ]);
+  });
+});
+
+describe("reviseTranscriptBlocks", () => {
+  const blocks: TranscriptBlock[] = [
+    { sequence: 1, startMs: 0, text: "Hello world." },
+    { sequence: 2, startMs: 5_000, text: "How are you?" },
+  ];
+
+  it("replaces only the text while preserving sequence and timestamps", () => {
+    expect(
+      reviseTranscriptBlocks(
+        blocks,
+        new Map([
+          [1, "  Hello,   world.  "],
+          [2, "How have you been?"],
+        ]),
+      ),
+    ).toEqual([
+      { sequence: 1, startMs: 0, text: "Hello, world." },
+      { sequence: 2, startMs: 5_000, text: "How have you been?" },
+    ]);
+  });
+
+  it("rejects missing and empty subtitle blocks", () => {
+    expect(() => reviseTranscriptBlocks(blocks, new Map([[1, "Hello."]]))).toThrow(
+      TranscriptEditError,
+    );
+    expect(() =>
+      reviseTranscriptBlocks(
+        blocks,
+        new Map([
+          [1, "Hello."],
+          [2, "   "],
+        ]),
+      ),
+    ).toThrow("2番目の英語字幕を入力してください");
   });
 });
 

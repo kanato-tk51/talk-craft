@@ -4,15 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import type { TranslationImportActionState } from "@/modules/youtube/application/action-state";
+import type {
+  TranscriptEditActionState,
+  TranslationImportActionState,
+} from "@/modules/youtube/application/action-state";
 import {
   addYoutubeKeyExpression,
   deleteYoutubeKeyExpression,
   deleteYoutubeMaterial,
   saveYoutubeTranslation,
   UserKeyExpressionError,
+  updateYoutubeTranscript,
 } from "@/modules/youtube/application/youtube-service";
 import {
+  TranscriptEditError,
   TranslationResponseError,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
@@ -53,6 +58,45 @@ export async function saveTranslationAction(
 
   revalidatePath(`/youtube/${materialId}`);
   return { message: "saved" };
+}
+
+export async function saveTranscriptAction(
+  materialId: string,
+  _previousState: TranscriptEditActionState,
+  formData: FormData,
+): Promise<TranscriptEditActionState> {
+  if (!identifiersSchema.safeParse({ materialId }).success) {
+    return { message: "教材が見つかりません。" };
+  }
+
+  const blockTexts = new Map<number, string>();
+  for (const [name, value] of formData.entries()) {
+    const match = /^transcriptBlock-(\d+)$/.exec(name);
+    if (!match || typeof value !== "string") continue;
+    const sequence = Number(match[1]);
+    if (!Number.isSafeInteger(sequence) || sequence < 1 || blockTexts.has(sequence)) {
+      return { message: "字幕の入力内容を確認してください。" };
+    }
+    blockTexts.set(sequence, value);
+  }
+
+  try {
+    const updated = await updateYoutubeTranscript(materialId, blockTexts);
+    if (!updated) {
+      return { message: "教材が更新されています。画面を再読み込みしてからお試しください。" };
+    }
+  } catch (error) {
+    if (error instanceof TranscriptEditError) {
+      return { message: error.message };
+    }
+    console.error("YouTube transcript update failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+    return { message: "英語字幕を保存できませんでした。" };
+  }
+
+  revalidatePath(`/youtube/${materialId}`);
+  redirect(`/youtube/${materialId}`);
 }
 
 export type KeyExpressionActionResult = { success: true } | { success: false; message: string };
