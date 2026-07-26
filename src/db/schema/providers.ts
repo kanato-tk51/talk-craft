@@ -1,36 +1,36 @@
-import {
-  boolean,
-  index,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 import { users } from "./users";
 
-export const providerTypeEnum = pgEnum("provider_type", ["preset", "custom", "api", "unknown"]);
+const providerTypes = ["preset", "custom", "api", "unknown"] as const;
 
-export const aiProviders = pgTable(
+export const aiProviders = sqliteTable(
   "ai_providers",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 200 }).notNull(),
-    providerType: providerTypeEnum("provider_type").notNull().default("custom"),
+    name: text("name").notNull(),
+    providerType: text("provider_type", { enum: providerTypes }).notNull().default("custom"),
     websiteUrl: text("website_url"),
-    supportsVoice: boolean("supports_voice"),
-    supportsText: boolean("supports_text"),
-    supportsFileExport: boolean("supports_file_export"),
-    promptTemplateType: varchar("prompt_template_type", { length: 100 }),
+    supportsVoice: integer("supports_voice", { mode: "boolean" }),
+    supportsText: integer("supports_text", { mode: "boolean" }),
+    supportsFileExport: integer("supports_file_export", { mode: "boolean" }),
+    promptTemplateType: text("prompt_template_type"),
     notes: text("notes").notNull().default(""),
-    isActive: boolean("is_active").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
-  (table) => [index("ai_providers_user_id_idx").on(table.userId)],
+  (table) => [
+    index("ai_providers_user_id_idx").on(table.userId),
+    check(
+      "ai_providers_provider_type_check",
+      sql`${table.providerType} in ('preset', 'custom', 'api', 'unknown')`,
+    ),
+  ],
 );

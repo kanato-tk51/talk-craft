@@ -1,87 +1,47 @@
 # Cloudflareへの本番デプロイ
 
-Talk CraftはCloudflare Workers上で動かし、Cloudflare Accessで指定した1つのメールアドレスだけを許可します。`main`へのpushはCloudflare Workers Buildsが検知し、自動的に本番へ反映します。
+Talk CraftはCloudflare WorkersとCloudflare D1上で動かし、Cloudflare Accessで指定した1つのメールアドレスだけを許可します。`main`へのpushはCloudflare Workers Buildsが検知し、D1 migrationを適用してから本番Workerを更新します。
 
 ## 構成
 
 ```text
 GitHub main
   └─ Cloudflare Workers Builds
+       ├─ D1 migration
        └─ Talk Craft Worker
             ├─ Cloudflare Access（メール完全一致）
             ├─ Access JWTのアプリ内再検証
-            └─ PostgreSQL
+            └─ Cloudflare D1
 ```
 
-アプリはCloudflareが追加する`Cf-Access-Jwt-Assertion`を検証します。署名だけでなく、Access teamのissuer、Application Audience、許可メールアドレスも確認します。開発環境だけは従来どおり`DEV_USER_ID`を使用します。
+アプリはCloudflareが追加する`Cf-Access-Jwt-Assertion`を検証します。署名だけでなく、Access teamのissuer、Application Audience、許可メールアドレスも確認します。認証済みユーザーは初回アクセス時にD1へ自動登録されるため、本番用のユーザーIDやseed処理は不要です。
 
-## 1. 本番PostgreSQLを準備する
+## 1. D1データベースを作成する
 
-Cloudflare WorkersはPostgreSQL自体を提供しないため、外部のPostgreSQLが必要です。無料枠のあるサービスを使用できます。接続URLはインターネットから到達可能で、TLSを有効にしてください。
-
-本番ユーザー用の固定UUIDを一度だけ生成します。
+ローカルでWranglerへログインし、D1を作成します。この操作に本番DBのパスワードや接続URLは必要ありません。
 
 ```bash
-node -e 'console.log(crypto.randomUUID())'
+npx wrangler login
+npx wrangler d1 create talk-craft-db --location apac
 ```
 
-`.env.production.example`を`.env.production.local`へコピーし、次を設定します。
+コマンド結果に表示された`database_id`を、`wrangler.jsonc`の`REPLACE_WITH_D1_DATABASE_ID`と置き換えてcommitします。D1のdatabase IDはbinding先を識別する値であり、認証情報ではありません。
 
-- `DATABASE_URL`: 本番PostgreSQLの接続URL
-- `APP_USER_ID`: 生成したUUID
-- `AUTHORIZED_EMAIL`: Cloudflare Accessで許可する本人のメール
-- `APP_USER_NAME`: 表示用の名前
-
-`.env.production.local`はGit管理対象外です。設定後、migrationと本人ユーザーの登録を実行します。
+`npm run db:migrate:remote`でも本番migrationを適用できますが、通常は後述のWorkers Buildsが自動実行します。DBスキーマを変更するときは、次の手順でSQLite migrationを生成してSQLをレビューします。
 
 ```bash
-DOTENV_CONFIG_PATH=.env.production.local npm run db:migrate
-DOTENV_CONFIG_PATH=.env.production.local npm run db:seed
+npm run db:generate
+npm run db:migrate
 ```
 
-`APP_USER_ID`と`AUTHORIZED_EMAIL`は、後でCloudflareへ登録する値と必ず一致させます。
+## 2. WorkerとGitHubを接続する
 
-## 2. Cloudflare Accessを準備する
-
-1. Cloudflare DashboardでZero Trustを開き、team nameを作成します。
-2. `Zero Trust > Integrations > Identity providers`で`One-time PIN`を追加します。
-3. `Workers & Pages`でWorkerを作成し、名前を`talk-craft`にします。リポジトリ内の`wrangler.jsonc`と同じ名前が必要です。
-4. Workerの`Settings > Domains & Routes`で`workers.dev`のCloudflare Accessを有効にします。
-5. Access policyを次のように設定します。
-   - Action: `Allow`
-   - Include selector: `Emails`
-   - Value: 本人のメールアドレス1件
-6. `Emails ending in`や`Everyone`は使用しません。
-7. Access Applicationの画面で次の値を確認します。
-   - Team domain: `https://<team-name>.cloudflareaccess.com`
-   - Application Audience（AUD）
-
-最初のWorker作成直後は仮の内容ですが、Accessを有効にしてからGitHubを接続します。
-
-## 3. Workerの実行時変数を設定する
-
-Workerの`Settings > Variables and Secrets`に以下を追加します。
-
-| 名前 | 種別 | 値 |
-| --- | --- | --- |
-| `DATABASE_URL` | Secret | 本番PostgreSQL接続URL |
-| `APP_ENV` | Text | `production` |
-| `APP_USER_ID` | Text | seedで使った固定UUID |
-| `AUTHORIZED_EMAIL` | Text | Accessで許可したメール |
-| `CLOUDFLARE_ACCESS_TEAM_DOMAIN` | Text | Accessのteam domain |
-| `CLOUDFLARE_ACCESS_AUD` | Text | Access ApplicationのAUD |
-
-`DATABASE_URL`は必ずSecretとして登録します。`wrangler.jsonc`の`keep_vars`により、Git連携から再デプロイしてもDashboardで管理する値は維持されます。
-
-## 4. GitHubとWorkers Buildsを接続する
-
-Workerの`Settings > Build`からGitリポジトリを接続します。
-
-1. Git providerにGitHubを選択します。
-2. Cloudflare GitHub Appに`kanato-tk51/talk-craft`へのアクセスを許可します。
-3. Repositoryに`kanato-tk51/talk-craft`を選択します。
-4. Production branchを`main`にします。
-5. Build settingsを次の値にします。
+1. Cloudflare Dashboardの`Workers & Pages`でWorkerを作成し、名前を`talk-craft`にします。
+2. Workerの`Settings > Build`からGitHubを接続します。
+3. Cloudflare GitHub Appに`kanato-tk51/talk-craft`へのアクセスを許可します。
+4. Repositoryに`kanato-tk51/talk-craft`を選択します。
+5. Production branchを`main`にします。
+6. Build settingsを次の値にします。
 
 | 項目 | 値 |
 | --- | --- |
@@ -90,41 +50,70 @@ Workerの`Settings > Build`からGitリポジトリを接続します。
 | Deploy command | `npm run deploy:worker` |
 | Node.js | `.node-version`により22 |
 
-6. `Builds for non-production branches`は最初は無効にします。Preview URLを使う場合は、そのURLにもAccessを有効にしてから利用します。
-7. API tokenはWorkers Buildsが自動生成する設定で構いません。
+`npm run deploy:worker`は`npm run db:migrate:remote`を先に実行してからWorkerをデプロイします。これにより、`main`へmergeされたmigrationとアプリが同じdeploymentで反映されます。
 
-接続後に最初のbuildを実行します。以後は`main`へのpush、またはPRの`main`へのマージごとに、build成功後のWorkerが本番へ自動反映されます。
+最初は`Builds for non-production branches`を無効にします。Preview URLを利用する場合は、preview用D1とAccessの保護を別途設定してください。
 
-## 5. 動作確認
+## 3. Cloudflare Accessを準備する
 
-次をすべて確認します。
+1. Cloudflare DashboardでZero Trustを開き、team nameを作成します。
+2. `Zero Trust > Integrations > Identity providers`で`One-time PIN`を追加します。
+3. Workerの`Settings > Domains & Routes`で`workers.dev`のCloudflare Accessを有効にします。
+4. Access policyを次のように設定します。
+   - Action: `Allow`
+   - Include selector: `Emails`
+   - Value: 本人のメールアドレス1件
+5. `Emails ending in`や`Everyone`は使用しません。
+6. Access Applicationの画面で次の値を確認します。
+   - Team domain: `https://<team-name>.cloudflareaccess.com`
+   - Application Audience（AUD）
+
+## 4. Workerの実行時変数を設定する
+
+Workerの`Settings > Variables and Secrets`に以下をTextとして追加します。
+
+| 名前 | 値 |
+| --- | --- |
+| `APP_ENV` | `production` |
+| `AUTHORIZED_EMAIL` | Accessで許可した本人のメール |
+| `CLOUDFLARE_ACCESS_TEAM_DOMAIN` | Accessのteam domain |
+| `CLOUDFLARE_ACCESS_AUD` | Access ApplicationのAUD |
+
+DB接続URL、DBパスワード、`APP_USER_ID`、`APP_USER_NAME`は不要です。D1は`wrangler.jsonc`の`DB` bindingから利用し、本人ユーザーは検証済みAccess JWTのメールアドレスから自動作成します。`keep_vars`により、Dashboardで管理する変数はGit連携から再デプロイしても維持されます。
+
+セッション作成時に一度に関連付けられる表現は20件です。これは[Workers Freeの1回の呼び出しあたりD1クエリ上限](https://developers.cloudflare.com/d1/platform/limits/)を超えないための制限です。
+
+## 5. 最初のdeploymentと動作確認
+
+`wrangler.jsonc`へ実際のD1 database IDをcommitして`main`へmergeすると、Workers Buildsがbuild、migration、deployを順に実行します。完了後に次を確認します。
 
 1. 本人のメールでOTPを受け取り、アプリを操作できる。
-2. シークレットウィンドウでは、アプリより先にAccessのログイン画面が表示される。
-3. 別のメールアドレスにはOTPが届かず、アクセスできない。
-4. ログイン後に`/api/health`が`{"status":"ok"}`を返す。
-5. `main`へ小さな変更をマージするとWorkers Buildsが起動し、成功後に本番へ反映される。
+2. 初回ログイン後、D1の`users`に本人ユーザーが自動作成される。
+3. シークレットウィンドウでは、アプリより先にAccessのログイン画面が表示される。
+4. 別のメールアドレスにはOTPが届かず、アクセスできない。
+5. ログイン後に`/api/health`が`{"status":"ok"}`を返す。
+6. `main`へ小さな変更をmergeするとWorkers Buildsが起動し、成功後に本番へ反映される。
 
 ## ローカル確認
 
-通常の開発は従来どおりです。
+通常の開発では、ローカルD1へmigrationを適用してからNext.jsを起動します。
 
 ```bash
+npm run db:migrate
 npm run dev
 ```
 
-Cloudflare Workersと同じ`workerd`環境で確認する場合は、`.dev.vars.example`を`.dev.vars`へコピーしてから実行します。
+ローカルデータは`.wrangler/state`に保存されます。本番D1の情報やデータをローカルへコピーする必要はありません。Cloudflare Workersと同じ`workerd`環境で確認する場合は、`.dev.vars.example`を`.dev.vars`へコピーして次を実行します。
 
 ```bash
 npm run preview
 ```
 
-## 将来の改善
-
-利用量やDB接続数が増えた場合は、Cloudflare Hyperdriveを追加します。HyperdriveはWorkers Freeでも1日10万クエリまで利用でき、PostgreSQL接続をCloudflare側でプールできます。一人利用の初回デプロイでは、まず直接接続で動作を確認してから追加します。
-
 ## 公式資料
 
+- [Cloudflare D1を作成する](https://developers.cloudflare.com/d1/get-started/)
+- [D1 migration](https://developers.cloudflare.com/d1/reference/migrations/)
+- [D1 binding](https://developers.cloudflare.com/d1/worker-api/d1-database/)
 - [Cloudflare WorkersのNext.js対応](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)
 - [Workers BuildsのGitHub連携](https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/github-integration/)
 - [Workers Buildsの設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)

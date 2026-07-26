@@ -1,10 +1,8 @@
 import { z } from "zod";
 
 const serverEnvSchema = z.object({
-  DATABASE_URL: z.string().min(1),
   DEV_USER_ID: z.uuid().default("00000000-0000-4000-8000-000000000001"),
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
-  APP_USER_ID: z.string().optional(),
   AUTHORIZED_EMAIL: z.string().optional(),
   CLOUDFLARE_ACCESS_TEAM_DOMAIN: z.string().optional(),
   CLOUDFLARE_ACCESS_AUD: z.string().optional(),
@@ -13,7 +11,6 @@ const serverEnvSchema = z.object({
 let cachedEnv: z.infer<typeof serverEnvSchema> | undefined;
 
 const productionAuthEnvSchema = z.object({
-  APP_USER_ID: z.uuid(),
   AUTHORIZED_EMAIL: z.email().transform((email) => email.toLocaleLowerCase("en-US")),
   CLOUDFLARE_ACCESS_TEAM_DOMAIN: z
     .url()
@@ -37,10 +34,8 @@ export function getServerEnv() {
   }
 
   cachedEnv = serverEnvSchema.parse({
-    DATABASE_URL: process.env.DATABASE_URL,
     DEV_USER_ID: process.env.DEV_USER_ID,
     APP_ENV: process.env.APP_ENV,
-    APP_USER_ID: process.env.APP_USER_ID,
     AUTHORIZED_EMAIL: process.env.AUTHORIZED_EMAIL,
     CLOUDFLARE_ACCESS_TEAM_DOMAIN: process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN,
     CLOUDFLARE_ACCESS_AUD: process.env.CLOUDFLARE_ACCESS_AUD,

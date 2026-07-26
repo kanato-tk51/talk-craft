@@ -1,13 +1,15 @@
-import { pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 120 }).notNull(),
-  email: varchar("email", { length: 320 }).notNull().unique(),
-  englishLevel: varchar("english_level", { length: 40 }),
-  nativeLanguage: varchar("native_language", { length: 20 }).notNull().default("ja"),
-  targetLanguage: varchar("target_language", { length: 20 }).notNull().default("en"),
+export const users = sqliteTable("users", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  englishLevel: text("english_level"),
+  nativeLanguage: text("native_language").notNull().default("ja"),
+  targetLanguage: text("target_language").notNull().default("en"),
   timezone: text("timezone").notNull().default("Asia/Tokyo"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
 });

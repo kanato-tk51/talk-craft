@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createSessionInputSchema, normalizeExpression } from "./create-session";
+import {
+  createSessionInputSchema,
+  MAX_LINKED_EXPRESSIONS,
+  normalizeExpression,
+} from "./create-session";
 
 const validInput = {
   title: "海外出張の自己紹介",
@@ -23,6 +27,18 @@ describe("createSessionInputSchema", () => {
         { expressionEn: "I coordinate with stakeholders.", meaningJa: "" },
         { expressionEn: " i   coordinate with stakeholders. ", meaningJa: "" },
       ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("keeps session creation within the D1 Free query limit", () => {
+    const result = createSessionInputSchema.safeParse({
+      ...validInput,
+      linkedExpressions: Array.from({ length: MAX_LINKED_EXPRESSIONS + 1 }, (_, index) => ({
+        expressionEn: `Expression ${index}`,
+        meaningJa: "",
+      })),
     });
 
     expect(result.success).toBe(false);

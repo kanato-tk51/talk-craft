@@ -262,7 +262,7 @@ paths:
                 replace_existing_ai_review: { type: boolean, default: false }
       responses:
         "200":
-          description: Import committed transactionally
+          description: Import committed atomically
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/InvalidInput" }
   /exports/me:

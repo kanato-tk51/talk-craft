@@ -1,24 +1,18 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { drizzle } from "drizzle-orm/d1";
 import { cache } from "react";
-
-import { getServerEnv } from "@/lib/env";
 
 import * as schema from "./schema";
 
-export function createDatabaseClient(connectionString = getServerEnv().DATABASE_URL) {
-  const sqlClient = postgres(connectionString, {
-    max: getServerEnv().APP_ENV === "development" ? 5 : 1,
-    prepare: false,
-    fetch_types: false,
-    idle_timeout: 5,
-    connect_timeout: 10,
-  });
-
-  return {
-    db: drizzle(sqlClient, { schema }),
-    sqlClient,
-  };
+export function createDatabaseClient(database: CloudflareEnv["DB"]) {
+  return drizzle(database, { schema });
 }
 
-export const getDb = cache(() => createDatabaseClient().db);
+export const getDb = cache(() => {
+  const database = getCloudflareContext().env.DB;
+  if (!database) {
+    throw new Error("Cloudflare D1 binding DB is unavailable.");
+  }
+
+  return createDatabaseClient(database);
+});

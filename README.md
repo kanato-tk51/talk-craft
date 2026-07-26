@@ -28,15 +28,12 @@ JSONインポートと復習編集は設計済みです。本番認証はCloudfl
 ## ローカル起動
 
 ```bash
-cp .env.example .env
 npm install
-docker compose up -d db
 npm run db:migrate
-npm run db:seed
 npm run dev
 ```
 
-`http://localhost:3000` を開いてください。詳しい前提とトラブルシュートは[ローカル開発環境](docs/product-design.md#21-ローカル開発環境の構築手順)を参照してください。
+ローカルDBはCloudflare D1互換のSQLiteとして`.wrangler/state`に作成され、開発ユーザーは初回アクセス時に自動登録されます。`http://localhost:3000`を開いてください。詳しい前提とトラブルシュートは[ローカル開発環境](docs/product-design.md#21-ローカル開発環境の構築手順)を参照してください。
 
 ## YouTube教材の使い方
 

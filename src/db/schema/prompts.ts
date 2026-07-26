@@ -1,36 +1,29 @@
 import { sql } from "drizzle-orm";
-import {
-  check,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { check, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { sessions } from "./sessions";
 
-export const promptTypeEnum = pgEnum("prompt_type", ["conversation_start", "review_output"]);
+const promptTypes = ["conversation_start", "review_output"] as const;
 
-export const generatedPrompts = pgTable(
+export const generatedPrompts = sqliteTable(
   "generated_prompts",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sessionId: uuid("session_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
-    promptType: promptTypeEnum("prompt_type").notNull(),
-    templateKey: varchar("template_key", { length: 120 }).notNull(),
-    templateVersion: varchar("template_version", { length: 40 }).notNull(),
-    schemaVersion: varchar("schema_version", { length: 40 }),
-    inputSnapshot: jsonb("input_snapshot").$type<Record<string, unknown>>().notNull(),
+    promptType: text("prompt_type", { enum: promptTypes }).notNull(),
+    templateKey: text("template_key").notNull(),
+    templateVersion: text("template_version").notNull(),
+    schemaVersion: text("schema_version"),
+    inputSnapshot: text("input_snapshot", { mode: "json" })
+      .$type<Record<string, unknown>>()
+      .notNull(),
     renderedContent: text("rendered_content").notNull(),
     revision: integer("revision").notNull().default(1),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("generated_prompts_session_type_revision_unique").on(
@@ -39,5 +32,9 @@ export const generatedPrompts = pgTable(
       table.revision,
     ),
     check("generated_prompts_revision_check", sql`${table.revision} >= 1`),
+    check(
+      "generated_prompts_prompt_type_check",
+      sql`${table.promptType} in ('conversation_start', 'review_output')`,
+    ),
   ],
 );
