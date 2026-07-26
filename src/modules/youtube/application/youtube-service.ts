@@ -5,6 +5,7 @@ import {
   buildTranscriptText,
   extractYouTubeVideoId,
   parseTranslationResponse,
+  removeKeyExpression,
   renderTranslationPrompt,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
@@ -138,6 +139,26 @@ export async function addYoutubeKeyExpression(materialId: string, input: UserKey
     ...material.keyExpressions,
     { ...validatedInput, origin: "user" },
   ]);
+}
+
+export async function deleteYoutubeKeyExpression(materialId: string, expressionEn: string) {
+  const actorUserId = getCurrentActorId();
+  const material = await findYoutubeMaterialForUser(actorUserId, materialId);
+  if (!material) {
+    throw new UserKeyExpressionError("教材が見つかりません。");
+  }
+
+  const remainingExpressions = removeKeyExpression(material.keyExpressions, expressionEn);
+  if (!remainingExpressions) {
+    throw new UserKeyExpressionError("重要表現が見つかりません。");
+  }
+
+  return updateYoutubeMaterialKeyExpressions(
+    actorUserId,
+    materialId,
+    material.version,
+    remainingExpressions,
+  );
 }
 
 export class UserKeyExpressionError extends Error {

@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { TranslationImportActionState } from "@/modules/youtube/application/action-state";
 import {
   addYoutubeKeyExpression,
+  deleteYoutubeKeyExpression,
   deleteYoutubeMaterial,
   saveYoutubeTranslation,
   UserKeyExpressionError,
@@ -18,6 +19,9 @@ import {
 } from "@/modules/youtube/domain/youtube-material";
 
 const identifiersSchema = z.object({ materialId: z.uuid() });
+const deleteKeyExpressionSchema = identifiersSchema.extend({
+  expressionEn: z.string().trim().min(1).max(1_000),
+});
 
 export async function saveTranslationAction(
   materialId: string,
@@ -51,12 +55,12 @@ export async function saveTranslationAction(
   return { message: "saved" };
 }
 
-export type AddKeyExpressionActionResult = { success: true } | { success: false; message: string };
+export type KeyExpressionActionResult = { success: true } | { success: false; message: string };
 
 export async function addKeyExpressionAction(
   materialId: string,
   input: UserKeyExpressionInput,
-): Promise<AddKeyExpressionActionResult> {
+): Promise<KeyExpressionActionResult> {
   if (!identifiersSchema.safeParse({ materialId }).success) {
     return { success: false, message: "教材が見つかりません。" };
   }
@@ -84,6 +88,40 @@ export async function addKeyExpressionAction(
       errorName: error instanceof Error ? error.name : "UnknownError",
     });
     return { success: false, message: "重要表現を保存できませんでした。" };
+  }
+
+  revalidatePath(`/youtube/${materialId}`);
+  return { success: true };
+}
+
+export async function deleteKeyExpressionAction(
+  materialId: string,
+  expressionEn: string,
+): Promise<KeyExpressionActionResult> {
+  const parsed = deleteKeyExpressionSchema.safeParse({ materialId, expressionEn });
+  if (!parsed.success) {
+    return { success: false, message: "削除する重要表現が見つかりません。" };
+  }
+
+  try {
+    const updated = await deleteYoutubeKeyExpression(
+      parsed.data.materialId,
+      parsed.data.expressionEn,
+    );
+    if (!updated) {
+      return {
+        success: false,
+        message: "教材が更新されています。画面を再読み込みしてからお試しください。",
+      };
+    }
+  } catch (error) {
+    if (error instanceof UserKeyExpressionError) {
+      return { success: false, message: error.message };
+    }
+    console.error("YouTube key expression deletion failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+    return { success: false, message: "重要表現を削除できませんでした。" };
   }
 
   revalidatePath(`/youtube/${materialId}`);

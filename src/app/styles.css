@@ -1098,6 +1098,40 @@ nav a:hover {
   font-size: 0.75rem;
 }
 
+.expression-comment-card > .expression-delete-error {
+  margin: 16px 0 0;
+  color: #a6412d;
+}
+
+.expression-delete-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.expression-delete-actions button {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid #a6412d;
+  border-radius: 3px;
+  color: #a6412d;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.expression-delete-actions button:hover {
+  color: white;
+  background: #a6412d;
+}
+
+.expression-delete-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .selection-expression-action {
   padding: 8px 12px;
   border: 0;
