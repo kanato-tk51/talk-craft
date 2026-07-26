@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { getDb } from "@/db/client";
 import { expressions, generatedPrompts, sessionExpressions, sessions } from "@/db/schema";
 import type { RenderedPromptSet } from "@/modules/prompts/domain/prompt";
 import { REVIEW_SCHEMA_VERSION } from "@/modules/prompts/domain/prompt";
@@ -12,6 +12,7 @@ export async function insertSessionWithPreparation(
   input: CreateSessionInput,
   prompts: RenderedPromptSet,
 ): Promise<string> {
+  const db = getDb();
   return db.transaction(async (transaction) => {
     const [createdSession] = await transaction
       .insert(sessions)
@@ -103,6 +104,7 @@ export async function insertSessionWithPreparation(
 }
 
 export async function findSessionsForUser(actorUserId: string) {
+  const db = getDb();
   return db
     .select({
       id: sessions.id,
@@ -117,6 +119,7 @@ export async function findSessionsForUser(actorUserId: string) {
 }
 
 export async function findSessionDetail(actorUserId: string, sessionId: string) {
+  const db = getDb();
   const [session] = await db
     .select()
     .from(sessions)
@@ -176,6 +179,7 @@ export async function linkExpressionRecord(
   sessionId: string,
   expressionId: string,
 ) {
+  const db = getDb();
   return db.transaction(async (transaction) => {
     const [[ownedSession], [ownedExpression]] = await Promise.all([
       transaction
@@ -231,6 +235,7 @@ export async function unlinkExpressionRecord(
   sessionId: string,
   sessionExpressionId: string,
 ) {
+  const db = getDb();
   const [ownedSession] = await db
     .select({ id: sessions.id })
     .from(sessions)
