@@ -12,13 +12,16 @@ import {
   addYoutubeKeyExpression,
   deleteYoutubeKeyExpression,
   deleteYoutubeMaterial,
+  editYoutubeTranscriptSelection,
   saveYoutubeTranslation,
   UserKeyExpressionError,
   updateYoutubeTranscript,
 } from "@/modules/youtube/application/youtube-service";
 import {
   TranscriptEditError,
+  type TranscriptSelectionEditInput,
   TranslationResponseError,
+  transcriptSelectionEditInputSchema,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
 } from "@/modules/youtube/domain/youtube-material";
@@ -100,6 +103,43 @@ export async function saveTranscriptAction(
 }
 
 export type KeyExpressionActionResult = { success: true } | { success: false; message: string };
+
+export async function editTranscriptSelectionAction(
+  materialId: string,
+  input: TranscriptSelectionEditInput,
+): Promise<KeyExpressionActionResult> {
+  if (!identifiersSchema.safeParse({ materialId }).success) {
+    return { success: false, message: "教材が見つかりません。" };
+  }
+  const parsed = transcriptSelectionEditInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "編集内容を確認してください。",
+    };
+  }
+
+  try {
+    const updated = await editYoutubeTranscriptSelection(materialId, parsed.data);
+    if (!updated) {
+      return {
+        success: false,
+        message: "教材が更新されています。画面を再読み込みしてから選択し直してください。",
+      };
+    }
+  } catch (error) {
+    if (error instanceof TranscriptEditError) {
+      return { success: false, message: error.message };
+    }
+    console.error("YouTube transcript selection update failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+    return { success: false, message: "選択した英語字幕を保存できませんでした。" };
+  }
+
+  revalidatePath(`/youtube/${materialId}`);
+  return { success: true };
+}
 
 export async function addKeyExpressionAction(
   materialId: string,

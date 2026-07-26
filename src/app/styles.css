@@ -1154,28 +1154,62 @@ nav a:hover {
   opacity: 0.55;
 }
 
-.selection-expression-action {
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 4px;
-  color: white;
-  background: var(--annotation-red);
+.selection-text-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgb(23 33 29 / 10%);
+  border-radius: 5px;
+  background: var(--surface-strong);
   box-shadow: 0 7px 20px rgb(23 33 29 / 24%);
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 750;
   position: fixed;
   z-index: 60;
   transform: translate(-50%, -100%);
 }
 
-.selection-expression-action:hover {
+.selection-text-actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 3px;
+  color: white;
+  background: var(--annotation-red);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.selection-text-actions button:hover {
   background: #8f2d27;
+}
+
+.selection-text-actions button + button {
+  background: var(--green);
+}
+
+.selection-text-actions button + button:hover {
+  background: var(--green-dark);
 }
 
 .expression-registration-card {
   display: grid;
   gap: 15px;
+}
+
+.transcript-selection-edit-card > div > small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.transcript-selection-edit-card > div > h3 {
+  margin-top: 5px;
+}
+
+.transcript-selection-edit-note {
+  margin: 0;
+  font-size: 0.72rem;
 }
 
 .expression-registration-card h3 {
@@ -1446,8 +1480,9 @@ code {
   .expression-comment-panel .expression-comment-card {
     transform: none;
   }
-  .selection-expression-action {
+  .selection-text-actions {
     max-width: calc(100% - 24px);
+    overflow-x: auto;
   }
   .bilingual-row {
     grid-template-columns: 50px 1fr;
