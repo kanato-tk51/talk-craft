@@ -4,13 +4,14 @@ import {
   buildTranscriptBlocks,
   buildTranscriptText,
   extractYouTubeVideoId,
+  parsePastedYoutubeTranscript,
   parseTranslationResponse,
   removeKeyExpression,
   renderTranslationPrompt,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
+  type YoutubeTranscriptSource,
 } from "../domain/youtube-material";
-import { fetchEnglishYoutubeTranscript } from "../infrastructure/youtube-caption-client";
 import {
   deleteYoutubeMaterialRecord,
   findYoutubeMaterialByVideoId,
@@ -43,17 +44,34 @@ export async function deleteYoutubeMaterial(materialId: string) {
   return deleteYoutubeMaterialRecord(await getCurrentActorId(), materialId);
 }
 
-export async function createYoutubeMaterial(inputUrl: string) {
+export async function createYoutubeMaterial(input: {
+  youtubeUrl: string;
+  title: string;
+  channelName: string;
+  transcript: string;
+}) {
   const actorUserId = await getCurrentActorId();
-  const youtubeVideoId = extractYouTubeVideoId(inputUrl);
-  if (youtubeVideoId) {
-    const existing = await findYoutubeMaterialByVideoId(actorUserId, youtubeVideoId);
-    if (existing) {
-      return { materialId: existing.id };
-    }
+  const youtubeVideoId = extractYouTubeVideoId(input.youtubeUrl);
+  if (!youtubeVideoId) {
+    throw new Error("Invalid YouTube URL");
   }
 
-  const source = await fetchEnglishYoutubeTranscript(inputUrl);
+  const existing = await findYoutubeMaterialByVideoId(actorUserId, youtubeVideoId);
+  if (existing) {
+    return { materialId: existing.id };
+  }
+
+  const source: YoutubeTranscriptSource = {
+    youtubeVideoId,
+    sourceUrl: `https://www.youtube.com/watch?v=${youtubeVideoId}`,
+    title: input.title.trim() || "YouTube動画",
+    channelName: input.channelName.trim(),
+    thumbnailUrl: `https://i.ytimg.com/vi/${youtubeVideoId}/hqdefault.jpg`,
+    captionLanguageCode: "en",
+    captionTrackName: "YouTube文字起こし（手動コピー）",
+    captionSource: "manual",
+    cues: parsePastedYoutubeTranscript(input.transcript),
+  };
   const transcriptBlocks = buildTranscriptBlocks(source.cues);
   if (!transcriptBlocks.length) {
     throw new Error("YouTube transcript did not contain readable text");

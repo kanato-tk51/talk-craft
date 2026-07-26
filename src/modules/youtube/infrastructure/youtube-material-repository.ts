@@ -4,10 +4,10 @@ import { getDb } from "@/db/client";
 import { youtubeMaterials } from "@/db/schema";
 
 import type {
-  FetchedYoutubeTranscript,
   KeyExpression,
   TranscriptBlock,
   TranslationBlock,
+  YoutubeTranscriptSource,
 } from "../domain/youtube-material";
 import { TRANSLATION_PROMPT_VERSION } from "../domain/youtube-material";
 
@@ -59,7 +59,7 @@ export async function findYoutubeMaterialByVideoId(actorUserId: string, youtubeV
 
 export async function insertYoutubeMaterial(
   actorUserId: string,
-  source: FetchedYoutubeTranscript,
+  source: YoutubeTranscriptSource,
   transcriptBlocks: TranscriptBlock[],
   transcriptText: string,
   translationPrompt: string,

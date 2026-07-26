@@ -287,6 +287,17 @@ nav a:hover {
   padding: 11px 0;
   resize: vertical;
 }
+.field textarea.transcript-paste-input {
+  min-height: 420px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  background: #f9f7f0;
+  font:
+    0.77rem / 1.65 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
 .field input:focus,
 .field textarea:focus,
 .field select:focus {

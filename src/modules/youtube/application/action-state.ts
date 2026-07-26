@@ -1,6 +1,17 @@
 export type YoutubeImportActionState = {
   message: string;
-  fieldErrors: { youtubeUrl?: string[] };
+  values: {
+    youtubeUrl: string;
+    title: string;
+    channelName: string;
+    transcript: string;
+  };
+  fieldErrors: {
+    youtubeUrl?: string[];
+    title?: string[];
+    channelName?: string[];
+    transcript?: string[];
+  };
 };
 
 export type TranslationImportActionState = {
