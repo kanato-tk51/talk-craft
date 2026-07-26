@@ -11,7 +11,7 @@ import {
 } from "../infrastructure/session-repository";
 
 export async function createSession(input: CreateSessionInput): Promise<string> {
-  const actorUserId = getCurrentActorId();
+  const actorUserId = await getCurrentActorId();
   const validatedInput = createSessionInputSchema.parse(input);
   const prompts = renderSessionPrompts(validatedInput);
 
@@ -19,17 +19,17 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
 }
 
 export async function listSessions() {
-  return findSessionsForUser(getCurrentActorId());
+  return findSessionsForUser(await getCurrentActorId());
 }
 
 export async function getSessionDetail(sessionId: string) {
-  return findSessionDetail(getCurrentActorId(), sessionId);
+  return findSessionDetail(await getCurrentActorId(), sessionId);
 }
 
 export async function linkExpression(sessionId: string, expressionId: string) {
-  return linkExpressionRecord(getCurrentActorId(), sessionId, expressionId);
+  return linkExpressionRecord(await getCurrentActorId(), sessionId, expressionId);
 }
 
 export async function unlinkExpression(sessionId: string, sessionExpressionId: string) {
-  return unlinkExpressionRecord(getCurrentActorId(), sessionId, sessionExpressionId);
+  return unlinkExpressionRecord(await getCurrentActorId(), sessionId, sessionExpressionId);
 }

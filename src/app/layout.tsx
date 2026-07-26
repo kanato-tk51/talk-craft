@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getCurrentActorId } from "@/modules/auth/application/current-actor";
 
 import "./styles.css";
 
@@ -11,7 +12,11 @@ export const metadata: Metadata = {
   description: "外部AIとの英会話を、予習から復習までつなげる学習管理ツール",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  await getCurrentActorId();
+
   return (
     <html lang="ja">
       <body>
