@@ -4,6 +4,8 @@ import {
   buildTranscriptBlocks,
   extractYouTubeVideoId,
   type KeyExpression,
+  PastedTranscriptError,
+  parsePastedYoutubeTranscript,
   parseTranslationResponse,
   removeKeyExpression,
   renderTranslationPrompt,
@@ -44,6 +46,62 @@ describe("buildTranscriptBlocks", () => {
   });
 });
 
+describe("parsePastedYoutubeTranscript", () => {
+  it("parses copied YouTube timestamps and ignores chapter headings", () => {
+    expect(
+      parsePastedYoutubeTranscript(`Intro
+0:00
+this video is sponsored by formation
+0:02
+stick around to hear more about how
+Meet Dana and Chris!
+0:04
+the next generation of engineers`),
+    ).toEqual([
+      {
+        startMs: 0,
+        durationMs: 2_000,
+        text: "this video is sponsored by formation",
+      },
+      {
+        startMs: 2_000,
+        durationMs: 2_000,
+        text: "stick around to hear more about how",
+      },
+      {
+        startMs: 4_000,
+        durationMs: 3_000,
+        text: "the next generation of engineers",
+      },
+    ]);
+  });
+
+  it("supports hour-long timestamps", () => {
+    expect(
+      parsePastedYoutubeTranscript(`1:02:03
+welcome back`),
+    ).toEqual([
+      {
+        startMs: 3_723_000,
+        durationMs: 3_000,
+        text: "welcome back",
+      },
+    ]);
+  });
+
+  it("rejects text without timestamps and timestamps that go backwards", () => {
+    expect(() => parsePastedYoutubeTranscript("plain transcript text")).toThrow(
+      PastedTranscriptError,
+    );
+    expect(() =>
+      parsePastedYoutubeTranscript(`0:02
+later
+0:01
+earlier`),
+    ).toThrow("タイムスタンプが時系列になっていません");
+  });
+});
+
 describe("translation prompt and response", () => {
   const blocks: TranscriptBlock[] = [
     { sequence: 1, startMs: 0, text: "Let's get down to business." },
@@ -79,6 +137,18 @@ describe("translation prompt and response", () => {
     expect(prompt).toContain("明確に判断できる");
     expect(prompt).toContain("最小限に補正");
     expect(prompt).toContain("推測で情報を追加");
+  });
+
+  it("identifies manually copied captions and allows minimal recognition corrections", () => {
+    const prompt = renderTranslationPrompt({
+      title: "A lesson",
+      channelName: "Teacher",
+      captionSource: "manual",
+      blocks,
+    });
+    expect(prompt).toContain("YouTubeから手動でコピーした字幕");
+    expect(prompt).toContain("音声認識の誤り");
+    expect(prompt).toContain("最小限に補正");
   });
 
   it("accepts a fenced JSON response and normalizes its keys", () => {
