@@ -1,6 +1,6 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { getDb } from "@/db/client";
 import { expressions } from "@/db/schema";
 
 import { type ExpressionInput, normalizeExpression } from "../domain/expression";
@@ -13,6 +13,7 @@ export class DuplicateExpressionError extends Error {
 }
 
 export async function findExpressionsForUser(actorUserId: string) {
+  const db = getDb();
   return db
     .select()
     .from(expressions)
@@ -21,6 +22,7 @@ export async function findExpressionsForUser(actorUserId: string) {
 }
 
 export async function findExpressionForUser(actorUserId: string, expressionId: string) {
+  const db = getDb();
   const [expression] = await db
     .select()
     .from(expressions)
@@ -31,6 +33,7 @@ export async function findExpressionForUser(actorUserId: string, expressionId: s
 }
 
 export async function insertExpression(actorUserId: string, input: ExpressionInput) {
+  const db = getDb();
   const normalized = normalizeExpression(input.expressionEn);
   const [existing] = await db
     .select({ id: expressions.id, learningStatus: expressions.learningStatus })
@@ -83,6 +86,7 @@ export async function updateExpressionRecord(
   expressionId: string,
   input: ExpressionInput,
 ) {
+  const db = getDb();
   const normalized = normalizeExpression(input.expressionEn);
   const [duplicate] = await db
     .select({ id: expressions.id })
@@ -114,6 +118,7 @@ export async function updateExpressionRecord(
 }
 
 export async function archiveExpressionRecord(actorUserId: string, expressionId: string) {
+  const db = getDb();
   const [archived] = await db
     .update(expressions)
     .set({ learningStatus: "archived", updatedAt: new Date() })

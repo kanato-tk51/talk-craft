@@ -1,24 +1,24 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { cache } from "react";
 
 import { getServerEnv } from "@/lib/env";
 
 import * as schema from "./schema";
 
-const globalForDatabase = globalThis as unknown as {
-  sqlClient: ReturnType<typeof postgres> | undefined;
-};
-
-const sqlClient =
-  globalForDatabase.sqlClient ??
-  postgres(getServerEnv().DATABASE_URL, {
-    max: getServerEnv().APP_ENV === "development" ? 5 : 10,
+export function createDatabaseClient(connectionString = getServerEnv().DATABASE_URL) {
+  const sqlClient = postgres(connectionString, {
+    max: getServerEnv().APP_ENV === "development" ? 5 : 1,
     prepare: false,
+    fetch_types: false,
+    idle_timeout: 5,
+    connect_timeout: 10,
   });
 
-if (getServerEnv().APP_ENV !== "production") {
-  globalForDatabase.sqlClient = sqlClient;
+  return {
+    db: drizzle(sqlClient, { schema }),
+    sqlClient,
+  };
 }
 
-export const db = drizzle(sqlClient, { schema });
-export { sqlClient };
+export const getDb = cache(() => createDatabaseClient().db);

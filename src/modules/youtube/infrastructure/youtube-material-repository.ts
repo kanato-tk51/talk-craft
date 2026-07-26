@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 
-import { db } from "@/db/client";
+import { getDb } from "@/db/client";
 import { youtubeMaterials } from "@/db/schema";
 
 import type {
@@ -12,6 +12,7 @@ import type {
 import { TRANSLATION_PROMPT_VERSION } from "../domain/youtube-material";
 
 export async function findYoutubeMaterialsForUser(actorUserId: string) {
+  const db = getDb();
   return db
     .select({
       id: youtubeMaterials.id,
@@ -30,6 +31,7 @@ export async function findYoutubeMaterialsForUser(actorUserId: string) {
 }
 
 export async function findYoutubeMaterialForUser(actorUserId: string, materialId: string) {
+  const db = getDb();
   const [material] = await db
     .select()
     .from(youtubeMaterials)
@@ -40,6 +42,7 @@ export async function findYoutubeMaterialForUser(actorUserId: string, materialId
 }
 
 export async function findYoutubeMaterialByVideoId(actorUserId: string, youtubeVideoId: string) {
+  const db = getDb();
   const [material] = await db
     .select({ id: youtubeMaterials.id })
     .from(youtubeMaterials)
@@ -61,6 +64,7 @@ export async function insertYoutubeMaterial(
   transcriptText: string,
   translationPrompt: string,
 ) {
+  const db = getDb();
   const [created] = await db
     .insert(youtubeMaterials)
     .values({
@@ -105,6 +109,7 @@ export async function updateYoutubeMaterialTranslation(
     rawAiResponse: string;
   },
 ) {
+  const db = getDb();
   const [updated] = await db
     .update(youtubeMaterials)
     .set({
@@ -134,6 +139,7 @@ export async function updateYoutubeMaterialKeyExpressions(
   expectedVersion: number,
   keyExpressions: KeyExpression[],
 ) {
+  const db = getDb();
   const [updated] = await db
     .update(youtubeMaterials)
     .set({
@@ -154,6 +160,7 @@ export async function updateYoutubeMaterialKeyExpressions(
 }
 
 export async function deleteYoutubeMaterialRecord(actorUserId: string, materialId: string) {
+  const db = getDb();
   const [deleted] = await db
     .delete(youtubeMaterials)
     .where(and(eq(youtubeMaterials.id, materialId), eq(youtubeMaterials.userId, actorUserId)))

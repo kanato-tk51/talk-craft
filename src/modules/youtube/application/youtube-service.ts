@@ -22,11 +22,11 @@ import {
 } from "../infrastructure/youtube-material-repository";
 
 export async function listYoutubeMaterials() {
-  return findYoutubeMaterialsForUser(getCurrentActorId());
+  return findYoutubeMaterialsForUser(await getCurrentActorId());
 }
 
 export async function getYoutubeMaterial(materialId: string) {
-  const material = await findYoutubeMaterialForUser(getCurrentActorId(), materialId);
+  const material = await findYoutubeMaterialForUser(await getCurrentActorId(), materialId);
   if (!material) return null;
   return {
     ...material,
@@ -40,11 +40,11 @@ export async function getYoutubeMaterial(materialId: string) {
 }
 
 export async function deleteYoutubeMaterial(materialId: string) {
-  return deleteYoutubeMaterialRecord(getCurrentActorId(), materialId);
+  return deleteYoutubeMaterialRecord(await getCurrentActorId(), materialId);
 }
 
 export async function createYoutubeMaterial(inputUrl: string) {
-  const actorUserId = getCurrentActorId();
+  const actorUserId = await getCurrentActorId();
   const youtubeVideoId = extractYouTubeVideoId(inputUrl);
   if (youtubeVideoId) {
     const existing = await findYoutubeMaterialByVideoId(actorUserId, youtubeVideoId);
@@ -77,7 +77,7 @@ export async function createYoutubeMaterial(inputUrl: string) {
 }
 
 export async function saveYoutubeTranslation(materialId: string, rawAiResponse: string) {
-  const actorUserId = getCurrentActorId();
+  const actorUserId = await getCurrentActorId();
   const material = await findYoutubeMaterialForUser(actorUserId, materialId);
   if (!material) {
     return false;
@@ -107,7 +107,7 @@ export async function saveYoutubeTranslation(materialId: string, rawAiResponse: 
 }
 
 export async function addYoutubeKeyExpression(materialId: string, input: UserKeyExpressionInput) {
-  const actorUserId = getCurrentActorId();
+  const actorUserId = await getCurrentActorId();
   const validatedInput = userKeyExpressionInputSchema.parse(input);
   const material = await findYoutubeMaterialForUser(actorUserId, materialId);
   if (!material) {
@@ -142,7 +142,7 @@ export async function addYoutubeKeyExpression(materialId: string, input: UserKey
 }
 
 export async function deleteYoutubeKeyExpression(materialId: string, expressionEn: string) {
-  const actorUserId = getCurrentActorId();
+  const actorUserId = await getCurrentActorId();
   const material = await findYoutubeMaterialForUser(actorUserId, materialId);
   if (!material) {
     throw new UserKeyExpressionError("教材が見つかりません。");

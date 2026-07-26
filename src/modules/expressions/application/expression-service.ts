@@ -14,27 +14,27 @@ import {
 } from "../infrastructure/expression-repository";
 
 export async function listExpressions() {
-  return findExpressionsForUser(getCurrentActorId());
+  return findExpressionsForUser(await getCurrentActorId());
 }
 
 export async function getExpression(expressionId: string) {
   const parsedExpressionId = expressionIdSchema.safeParse(expressionId);
   if (!parsedExpressionId.success) return null;
-  return findExpressionForUser(getCurrentActorId(), parsedExpressionId.data);
+  return findExpressionForUser(await getCurrentActorId(), parsedExpressionId.data);
 }
 
 export async function createExpression(input: ExpressionInput) {
-  return insertExpression(getCurrentActorId(), expressionInputSchema.parse(input));
+  return insertExpression(await getCurrentActorId(), expressionInputSchema.parse(input));
 }
 
 export async function updateExpression(expressionId: string, input: ExpressionInput) {
   return updateExpressionRecord(
-    getCurrentActorId(),
+    await getCurrentActorId(),
     expressionIdSchema.parse(expressionId),
     expressionInputSchema.parse(input),
   );
 }
 
 export async function archiveExpression(expressionId: string) {
-  return archiveExpressionRecord(getCurrentActorId(), expressionIdSchema.parse(expressionId));
+  return archiveExpressionRecord(await getCurrentActorId(), expressionIdSchema.parse(expressionId));
 }

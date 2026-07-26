@@ -3,7 +3,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
-import { db, sqlClient } from "../src/db/client";
+import { createDatabaseClient } from "../src/db/client";
 import { expressions, sessions } from "../src/db/schema";
 import {
   createExpression,
@@ -17,6 +17,7 @@ import {
 } from "../src/modules/sessions/application/session-service";
 
 async function main() {
+  const { db, sqlClient } = createDatabaseClient();
   const actorUserId = process.env.DEV_USER_ID;
   if (!actorUserId) {
     throw new Error("DEV_USER_ID is required for smoke cleanup");
