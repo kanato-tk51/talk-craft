@@ -9,7 +9,7 @@ import {
   createExpression,
   updateExpression,
 } from "@/modules/expressions/application/expression-service";
-import { expressionInputSchema } from "@/modules/expressions/domain/expression";
+import { expressionIdSchema, expressionInputSchema } from "@/modules/expressions/domain/expression";
 import { DuplicateExpressionError } from "@/modules/expressions/infrastructure/expression-repository";
 import { linkExpression } from "@/modules/sessions/application/session-service";
 
@@ -90,6 +90,11 @@ export async function updateExpressionAction(
   _previousState: ExpressionActionState,
   formData: FormData,
 ): Promise<ExpressionActionState> {
+  const parsedExpressionId = expressionIdSchema.safeParse(expressionId);
+  if (!parsedExpressionId.success) {
+    return { message: "表現が見つかりません。", fieldErrors: {} };
+  }
+
   const returnToSessionId = returnSessionId(formData);
   const result = parseExpressionForm(formData);
   if (!result.success) {
@@ -100,7 +105,7 @@ export async function updateExpressionAction(
   }
 
   try {
-    const updated = await updateExpression(expressionId, result.data);
+    const updated = await updateExpression(parsedExpressionId.data, result.data);
     if (!updated) {
       return { message: "表現が見つかりません。", fieldErrors: {} };
     }
@@ -113,7 +118,12 @@ export async function updateExpressionAction(
 
 export async function archiveExpressionAction(expressionId: string, formData: FormData) {
   const returnToSessionId = returnSessionId(formData);
-  await archiveExpression(expressionId);
+  const parsedExpressionId = expressionIdSchema.safeParse(expressionId);
+  if (!parsedExpressionId.success) {
+    redirect(returnToSessionId ? `/sessions/${returnToSessionId}` : "/expressions");
+  }
+
+  await archiveExpression(parsedExpressionId.data);
   revalidatePath("/expressions");
   redirect(returnToSessionId ? `/sessions/${returnToSessionId}` : "/expressions");
 }

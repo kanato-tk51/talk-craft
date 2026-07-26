@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const expressionPriorities = ["high", "medium", "low"] as const;
 export const expressionLearningStatuses = ["new", "practicing", "active", "mastered"] as const;
+export const expressionIdSchema = z.uuid();
 
 export const expressionInputSchema = z.object({
   expressionEn: z.string().trim().min(1, "英語表現を入力してください").max(1000),
