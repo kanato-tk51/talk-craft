@@ -11,6 +11,14 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "talk-craft-db",
+      "database_id": "a06605f9-a375-4e54-8a15-b5599633e3c9",
+      "migrations_dir": "drizzle"
+    }
+  ],
   "observability": {
     "enabled": true
   }
