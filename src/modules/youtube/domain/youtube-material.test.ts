@@ -89,6 +89,33 @@ welcome back`),
     ]);
   });
 
+  it("allows multiple captions within the same displayed second", () => {
+    expect(
+      parsePastedYoutubeTranscript(`7:59
+the
+7:59
+later
+8:00
+stage of their career`),
+    ).toEqual([
+      {
+        startMs: 479_000,
+        durationMs: 1_000,
+        text: "the",
+      },
+      {
+        startMs: 479_000,
+        durationMs: 1_000,
+        text: "later",
+      },
+      {
+        startMs: 480_000,
+        durationMs: 3_000,
+        text: "stage of their career",
+      },
+    ]);
+  });
+
   it("rejects text without timestamps and timestamps that go backwards", () => {
     expect(() => parsePastedYoutubeTranscript("plain transcript text")).toThrow(
       PastedTranscriptError,

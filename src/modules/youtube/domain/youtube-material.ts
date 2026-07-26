@@ -223,7 +223,7 @@ export function parsePastedYoutubeTranscript(input: string): TranscriptCue[] {
       continue;
     }
 
-    if (currentStartMs !== null && timestampMs <= currentStartMs) {
+    if (currentStartMs !== null && timestampMs < currentStartMs) {
       throw new PastedTranscriptError(
         "タイムスタンプが時系列になっていません。YouTubeの文字起こしを先頭からコピーしてください。",
       );
