@@ -4,16 +4,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import type { YoutubeImportActionState } from "@/modules/youtube/application/action-state";
-import { queueYoutubeGeneration } from "@/modules/youtube/application/youtube-background-generation";
-import {
-  chooseManualYoutubeTranslation,
-  createYoutubeMaterial,
-} from "@/modules/youtube/application/youtube-service";
+import { createYoutubeMaterial } from "@/modules/youtube/application/youtube-service";
 import { YoutubeTranscriptError } from "@/modules/youtube/infrastructure/youtube-caption-client";
 
 const youtubeImportSchema = z.object({
   youtubeUrl: z.string().trim().min(1, "YouTubeのURLを入力してください").max(2_000),
-  generationMethod: z.enum(["api", "browser"]).default("browser"),
 });
 
 export async function importYoutubeAction(
@@ -22,7 +17,6 @@ export async function importYoutubeAction(
 ): Promise<YoutubeImportActionState> {
   const parsedInput = youtubeImportSchema.safeParse({
     youtubeUrl: formData.get("youtubeUrl"),
-    generationMethod: formData.get("generationMethod") || undefined,
   });
   if (!parsedInput.success) {
     return {
@@ -47,29 +41,5 @@ export async function importYoutubeAction(
     };
   }
 
-  let failureQuery = "";
-  if (creationResult.automaticTranslation === "pending") {
-    if (parsedInput.data.generationMethod === "browser") {
-      try {
-        const selected = await chooseManualYoutubeTranslation(creationResult.materialId);
-        failureQuery = selected ? "?method=browser" : "";
-      } catch (error) {
-        console.error("Browser translation mode could not be selected", {
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        });
-        failureQuery = "?generation=failed&method=browser";
-      }
-    } else {
-      try {
-        const queueResult = await queueYoutubeGeneration(creationResult.materialId);
-        if (queueResult === "missing") failureQuery = "?generation=failed";
-      } catch (error) {
-        console.error("YouTube background translation could not be queued", {
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        });
-        failureQuery = "?generation=failed";
-      }
-    }
-  }
-  redirect(`/youtube/${creationResult.materialId}${failureQuery}`);
+  redirect(`/youtube/${creationResult.materialId}`);
 }

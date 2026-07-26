@@ -24,7 +24,7 @@ export function YoutubeImportForm() {
           <span className="step-number">01</span>
           <div>
             <h2>YouTube動画を選ぶ</h2>
-            <p>公開動画の英語字幕を取得し、日本語訳と重要表現まで自動生成します。</p>
+            <p>公開動画の英語字幕を取得し、ChatGPTへ渡すプロンプトを作成します。</p>
           </div>
         </div>
         <label className="field field-wide">
@@ -48,26 +48,6 @@ export function YoutubeImportForm() {
           </small>
         </label>
       </section>
-
-      <fieldset className="translation-method-fieldset">
-        <legend>日本語訳の作成方法</legend>
-        <div className="translation-method-options">
-          <label className="translation-method-option">
-            <input type="radio" name="generationMethod" value="browser" defaultChecked />
-            <span>
-              <strong>ブラウザ版ChatGPTを使う</strong>
-              <small>プロンプトをコピーしてChatGPTへ貼り、回答JSONをアプリへ戻します。</small>
-            </span>
-          </label>
-          <label className="translation-method-option">
-            <input type="radio" name="generationMethod" value="api" />
-            <span>
-              <strong>APIで自動生成</strong>
-              <small>URLを送信した後は、ページを閉じてもバックグラウンドで完成します。</small>
-            </span>
-          </label>
-        </div>
-      </fieldset>
 
       <div className="form-actions">
         <Link className="button button-secondary" href="/youtube">

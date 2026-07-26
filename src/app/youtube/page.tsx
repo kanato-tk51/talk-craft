@@ -34,17 +34,7 @@ export default async function YoutubeMaterialsPage() {
                   <span
                     className={`status ${material.translatedAt ? "" : "status-awaiting_review"}`}
                   >
-                    {material.translatedAt
-                      ? "教材生成済み"
-                      : material.generationStatus === "failed"
-                        ? "生成中断"
-                        : material.generationStatus === "manual"
-                          ? "ChatGPTの回答待ち"
-                          : ["queued", "structuring", "translating"].includes(
-                                material.generationStatus,
-                              )
-                            ? "バックグラウンド生成中"
-                            : "生成待ち"}
+                    {material.translatedAt ? "教材登録済み" : "ChatGPTの回答待ち"}
                   </span>
                   <span>{material.captionTrackName}</span>
                 </div>

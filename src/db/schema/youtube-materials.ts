@@ -10,10 +10,6 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import type {
-  YoutubeGenerationCheckpoint,
-  YoutubeGenerationStatus,
-} from "@/modules/youtube/domain/youtube-generation";
 import {
   type KeyExpression,
   TRANSLATION_PROMPT_VERSION,
@@ -55,12 +51,6 @@ export const youtubeMaterials = pgTable(
       .default([]),
     keyExpressions: jsonb("key_expressions").$type<KeyExpression[]>().notNull().default([]),
     rawAiResponse: text("raw_ai_response").notNull().default(""),
-    generationStatus: varchar("generation_status", { length: 20 })
-      .$type<YoutubeGenerationStatus>()
-      .notNull()
-      .default("pending"),
-    generationCheckpoint: jsonb("generation_checkpoint").$type<YoutubeGenerationCheckpoint>(),
-    generationError: text("generation_error").notNull().default(""),
     version: integer("version").notNull().default(1),
     translatedAt: timestamp("translated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
