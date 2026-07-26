@@ -11,7 +11,9 @@ export default function NewYoutubeMaterialPage() {
       <div className="page-intro">
         <div className="eyebrow">NEW YOUTUBE MATERIAL</div>
         <h1>動画から教材を作る</h1>
-        <p>URLを貼るだけで、英語字幕の取得から自然な段落、日本語訳、重要表現まで作ります。</p>
+        <p>
+          URLから英語字幕を取得し、ChatGPTで日本語訳と重要表現を作るためのプロンプトを用意します。
+        </p>
       </div>
       <YoutubeImportForm />
     </div>

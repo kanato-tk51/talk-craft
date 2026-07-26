@@ -3,12 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { scheduleYoutubeGeneration } from "@/modules/youtube/application/youtube-background-generation";
 import { getYoutubeMaterial } from "@/modules/youtube/application/youtube-service";
 import { AnnotatedTranscript } from "@/modules/youtube/ui/annotated-transcript";
+import { BrowserTranslationWorkflow } from "@/modules/youtube/ui/browser-translation-workflow";
 import { DeleteYoutubeMaterialButton } from "@/modules/youtube/ui/delete-youtube-material-button";
-import { RegenerateYoutubeTranslationButton } from "@/modules/youtube/ui/regenerate-youtube-translation-button";
-import { TranslationMethodSelector } from "@/modules/youtube/ui/translation-method-selector";
 
 export const metadata: Metadata = { title: "YouTube教材" };
 export const dynamic = "force-dynamic";
@@ -26,23 +24,16 @@ function timestamp(startMs: number): string {
 
 export default async function YoutubeMaterialDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ materialId: string }>;
-  searchParams: Promise<{ generation?: string | string[]; method?: string | string[] }>;
 }) {
   const { materialId } = await params;
-  const query = await searchParams;
   if (!z.uuid().safeParse(materialId).success) notFound();
 
   const material = await getYoutubeMaterial(materialId);
   if (!material) notFound();
 
   const translated = material.translatedAt !== null;
-  const generationActive = ["queued", "structuring", "translating"].includes(
-    material.generationStatus,
-  );
-  if (!translated && generationActive) scheduleYoutubeGeneration(material.id);
 
   return (
     <div className="page-shell detail-shell youtube-detail-shell">
@@ -68,9 +59,6 @@ export default async function YoutubeMaterialDetailPage({
             <a className="text-action" href={material.sourceUrl} target="_blank" rel="noreferrer">
               YouTubeで動画を見る ↗
             </a>
-            {translated ? (
-              <RegenerateYoutubeTranslationButton materialId={material.id} title={material.title} />
-            ) : null}
             <DeleteYoutubeMaterialButton materialId={material.id} title={material.title} />
           </div>
         </div>
@@ -87,21 +75,7 @@ export default async function YoutubeMaterialDetailPage({
         </div>
         <div>
           <span>翻訳状態</span>
-          <b>
-            {translated
-              ? "自動生成済み"
-              : material.generationStatus === "failed"
-                ? `生成中断（${material.translationBlocks.length}段落保存済み）`
-                : material.generationStatus === "manual"
-                  ? "ChatGPTの回答待ち"
-                  : material.generationStatus === "queued"
-                    ? "バックグラウンド処理の開始待ち"
-                    : material.generationStatus === "structuring"
-                      ? "段落構成を分析中"
-                      : material.generationStatus === "translating"
-                        ? `生成途中（${material.translationBlocks.length}段落保存済み）`
-                        : "自動生成待ち"}
-          </b>
+          <b>{translated ? "登録済み" : "ChatGPTの回答待ち"}</b>
         </div>
       </div>
 
@@ -123,14 +97,9 @@ export default async function YoutubeMaterialDetailPage({
         </>
       ) : (
         <>
-          <TranslationMethodSelector
+          <BrowserTranslationWorkflow
             materialId={material.id}
             translationPrompt={material.translationPrompt}
-            initialMethod={query.method === "api" ? "api" : "browser"}
-            initialFailure={query.generation === "failed"}
-            generationError={material.generationError}
-            savedParagraphCount={material.translationBlocks.length}
-            generationStatus={material.generationStatus}
           />
           <section className="raw-transcript-section">
             <div className="section-title-row">

@@ -6,10 +6,6 @@ import { z } from "zod";
 
 import type { TranslationImportActionState } from "@/modules/youtube/application/action-state";
 import {
-  queueYoutubeGeneration,
-  restartYoutubeGeneration,
-} from "@/modules/youtube/application/youtube-background-generation";
-import {
   addYoutubeKeyExpression,
   deleteYoutubeMaterial,
   saveYoutubeTranslation,
@@ -53,57 +49,6 @@ export async function saveTranslationAction(
 
   revalidatePath(`/youtube/${materialId}`);
   return { message: "saved" };
-}
-
-export async function retryAutomaticTranslationAction(
-  materialId: string,
-  _previousState: TranslationImportActionState,
-  _formData: FormData,
-): Promise<TranslationImportActionState> {
-  if (!identifiersSchema.safeParse({ materialId }).success) {
-    return { message: "教材が見つかりません。" };
-  }
-
-  try {
-    const result = await queueYoutubeGeneration(materialId);
-    if (result === "missing") return { message: "教材が見つかりません。" };
-    if (result === "completed") return { message: "saved" };
-  } catch (error) {
-    console.error("YouTube background translation could not be queued", {
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    });
-    return {
-      message: "バックグラウンド処理を開始できませんでした。少し待ってから再実行してください。",
-    };
-  }
-
-  revalidatePath(`/youtube/${materialId}`);
-  revalidatePath("/youtube");
-  return { message: "queued" };
-}
-
-export async function regenerateAutomaticTranslationAction(
-  materialId: string,
-  _formData: FormData,
-) {
-  if (!identifiersSchema.safeParse({ materialId }).success) {
-    redirect("/youtube");
-  }
-
-  let result: Awaited<ReturnType<typeof restartYoutubeGeneration>>;
-  try {
-    result = await restartYoutubeGeneration(materialId);
-  } catch (error) {
-    console.error("YouTube translation regeneration could not be queued", {
-      errorName: error instanceof Error ? error.name : "UnknownError",
-    });
-    redirect(`/youtube/${materialId}?generation=failed&method=api`);
-  }
-  if (result === "missing") redirect("/youtube");
-
-  revalidatePath(`/youtube/${materialId}`);
-  revalidatePath("/youtube");
-  redirect(`/youtube/${materialId}?method=api`);
 }
 
 export type AddKeyExpressionActionResult = { success: true } | { success: false; message: string };

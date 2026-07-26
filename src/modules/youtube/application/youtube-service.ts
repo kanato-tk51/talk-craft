@@ -16,7 +16,6 @@ import {
   findYoutubeMaterialForUser,
   findYoutubeMaterialsForUser,
   insertYoutubeMaterial,
-  markYoutubeMaterialGenerationManual,
   updateYoutubeMaterialKeyExpressions,
   updateYoutubeMaterialTranslation,
 } from "../infrastructure/youtube-material-repository";
@@ -43,23 +42,13 @@ export async function deleteYoutubeMaterial(materialId: string) {
   return deleteYoutubeMaterialRecord(getCurrentActorId(), materialId);
 }
 
-export async function chooseManualYoutubeTranslation(materialId: string) {
-  return markYoutubeMaterialGenerationManual(getCurrentActorId(), materialId);
-}
-
 export async function createYoutubeMaterial(inputUrl: string) {
   const actorUserId = getCurrentActorId();
   const youtubeVideoId = extractYouTubeVideoId(inputUrl);
   if (youtubeVideoId) {
     const existing = await findYoutubeMaterialByVideoId(actorUserId, youtubeVideoId);
     if (existing) {
-      if (existing.translatedAt) {
-        return { materialId: existing.id, automaticTranslation: "already_completed" as const };
-      }
-      return {
-        materialId: existing.id,
-        automaticTranslation: "pending" as const,
-      };
+      return { materialId: existing.id };
     }
   }
 
@@ -83,10 +72,7 @@ export async function createYoutubeMaterial(inputUrl: string) {
     transcriptText,
     translationPrompt,
   );
-  return {
-    materialId,
-    automaticTranslation: "pending" as const,
-  };
+  return { materialId };
 }
 
 export async function saveYoutubeTranslation(materialId: string, rawAiResponse: string) {
