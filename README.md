@@ -16,11 +16,12 @@
 - ChatGPTの回答JSONを取り込み、自然な意味段落・日本語訳・重要表現を登録
 - 原文・段落・時刻・注釈位置をアプリ側で検証
 
-JSONインポート、復習編集、認証は設計済みで、後続マイルストーンで実装します。
+JSONインポートと復習編集は設計済みです。本番認証はCloudflare Accessで本人だけを許可し、アプリ側でもAccess JWTを検証します。
 
 ## ドキュメント
 
 - [プロダクト・技術設計](docs/product-design.md)
+- [Cloudflareへの本番デプロイ](docs/cloudflare-deployment.md)
 - [外部AI出力 JSON Schema v1](docs/schemas/session-review.v1.schema.json)
 - [API設計](docs/api/openapi.yaml)
 
