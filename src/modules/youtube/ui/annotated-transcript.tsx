@@ -16,21 +16,29 @@ import {
 import {
   addKeyExpressionAction,
   deleteKeyExpressionAction,
+  editTranscriptSelectionAction,
 } from "@/app/youtube/[materialId]/actions";
 import { type ExpressionRange, findExpressionRanges } from "../domain/expression-annotations";
 import type {
   KeyExpression,
   TranscriptBlock,
+  TranscriptSelectionEditInput,
   TranslationBlock,
   UserKeyExpressionInput,
 } from "../domain/youtube-material";
 
 type SelectionCandidate = {
   expressionEn: string;
+  blockSequence: number;
+  sourceStart: number;
+  sourceEnd: number;
+  originalText: string;
   toolbarLeft: number;
   toolbarTop: number;
   commentTop: number;
 };
+
+type TranscriptSelectionEditDraft = TranscriptSelectionEditInput;
 
 type SelectionSnapshot = {
   anchorNode: Node | null;
@@ -56,10 +64,13 @@ export function AnnotatedTranscript({
   const [selectedExpressionIndex, setSelectedExpressionIndex] = useState<number | null>(null);
   const [selectionCandidate, setSelectionCandidate] = useState<SelectionCandidate | null>(null);
   const [registrationDraft, setRegistrationDraft] = useState<UserKeyExpressionInput | null>(null);
+  const [editDraft, setEditDraft] = useState<TranscriptSelectionEditDraft | null>(null);
   const [registrationError, setRegistrationError] = useState("");
+  const [editError, setEditError] = useState("");
   const [deletionError, setDeletionError] = useState("");
   const [commentTop, setCommentTop] = useState(36);
   const [savingExpression, startSavingExpression] = useTransition();
+  const [savingEdit, startSavingEdit] = useTransition();
   const [deletingExpression, startDeletingExpression] = useTransition();
   const layoutRef = useRef<HTMLDivElement>(null);
   const selectedAnnotationRef = useRef<HTMLElement>(null);
@@ -134,12 +145,18 @@ export function AnnotatedTranscript({
     alignCommentToElement(annotation);
     setSelectionCandidate(null);
     setRegistrationDraft(null);
+    setEditDraft(null);
     setRegistrationError("");
+    setEditError("");
     setDeletionError("");
     setSelectedExpressionIndex(expressionIndex);
   }
 
-  function captureSelection(container: HTMLElement) {
+  function captureSelection(
+    container: HTMLElement,
+    blockSequence: number,
+    sentenceSourceStart: number,
+  ) {
     const selection = window.getSelection();
     if (
       !selection ||
@@ -153,21 +170,43 @@ export function AnnotatedTranscript({
       return;
     }
 
-    const expressionEn = selection.toString().replaceAll(/\s+/g, " ").trim();
-    if (!expressionEn || expressionEn.length > 1_000 || selection.rangeCount === 0) {
+    if (selection.rangeCount === 0) {
       setSelectionCandidate(null);
       return;
     }
 
-    const selectionRect = selection.getRangeAt(0).getBoundingClientRect();
+    const selectedRange = selection.getRangeAt(0);
+    const offsets = selectionOffsetsWithin(container, selectedRange);
+    if (!offsets) {
+      setSelectionCandidate(null);
+      return;
+    }
+    const containerText = container.textContent ?? "";
+    const untrimmedText = containerText.slice(offsets.start, offsets.end);
+    const leadingWhitespace = untrimmedText.length - untrimmedText.trimStart().length;
+    const trailingWhitespace = untrimmedText.length - untrimmedText.trimEnd().length;
+    const localStart = offsets.start + leadingWhitespace;
+    const localEnd = offsets.end - trailingWhitespace;
+    const originalText = containerText.slice(localStart, localEnd);
+    const expressionEn = originalText.replaceAll(/\s+/g, " ").trim();
+    if (!originalText || originalText.length > 1_000 || !expressionEn) {
+      setSelectionCandidate(null);
+      return;
+    }
+
+    const selectionRect = selectedRange.getBoundingClientRect();
     const layoutRect = layoutRef.current?.getBoundingClientRect();
     if (!layoutRect) return;
 
     setSelectionCandidate({
       expressionEn,
+      blockSequence,
+      sourceStart: sentenceSourceStart + localStart,
+      sourceEnd: sentenceSourceStart + localEnd,
+      originalText,
       toolbarLeft: Math.min(
-        window.innerWidth - 110,
-        Math.max(110, selectionRect.left + selectionRect.width / 2),
+        window.innerWidth - 130,
+        Math.max(130, selectionRect.left + selectionRect.width / 2),
       ),
       toolbarTop: Math.max(12, selectionRect.top - 10),
       commentTop: selectionRect.top - layoutRect.top + selectionRect.height / 2,
@@ -180,12 +219,33 @@ export function AnnotatedTranscript({
     selectedAnnotationRef.current = null;
     setCommentTop(selectionCandidate.commentTop);
     setRegistrationError("");
+    setEditDraft(null);
+    setEditError("");
     setRegistrationDraft({
       expressionEn: selectionCandidate.expressionEn,
       meaningJa: "",
       explanationJa: "",
       exampleEn: "",
       exampleJa: "",
+    });
+    setSelectionCandidate(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function beginTranscriptSelectionEdit() {
+    if (!selectionCandidate) return;
+    setSelectedExpressionIndex(null);
+    selectedAnnotationRef.current = null;
+    setRegistrationDraft(null);
+    setRegistrationError("");
+    setCommentTop(selectionCandidate.commentTop);
+    setEditError("");
+    setEditDraft({
+      blockSequence: selectionCandidate.blockSequence,
+      sourceStart: selectionCandidate.sourceStart,
+      sourceEnd: selectionCandidate.sourceEnd,
+      originalText: selectionCandidate.originalText,
+      replacementText: selectionCandidate.originalText,
     });
     setSelectionCandidate(null);
     window.getSelection()?.removeAllRanges();
@@ -209,6 +269,21 @@ export function AnnotatedTranscript({
         return;
       }
       setRegistrationDraft(null);
+      router.refresh();
+    });
+  }
+
+  function saveTranscriptSelectionEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editDraft) return;
+    setEditError("");
+    startSavingEdit(async () => {
+      const result = await editTranscriptSelectionAction(materialId, editDraft);
+      if (!result.success) {
+        setEditError(result.message);
+        return;
+      }
+      setEditDraft(null);
       router.refresh();
     });
   }
@@ -264,7 +339,7 @@ export function AnnotatedTranscript({
           <div className="eyebrow">TRANSCRIPT & TRANSLATION</div>
           <h2>英語原文と日本語訳</h2>
           <p className="annotation-help">
-            赤い下線の表現はクリックして解説を開閉できます。登録された表現は、解説パネルで削除できます。
+            英語を選択すると、重要表現への登録または選択部分の編集を選べます。赤い下線の表現はクリックして解説を開閉できます。
           </p>
         </div>
         <span>
@@ -295,10 +370,15 @@ export function AnnotatedTranscript({
                     <div lang="en">
                       <p
                         className="annotated-source-text"
-                        onMouseUp={(event) => captureSelection(event.currentTarget)}
+                        onMouseUp={(event) =>
+                          captureSelection(event.currentTarget, block.sequence, pair.sourceStart)
+                        }
                         onTouchEnd={(event) => {
                           const container = event.currentTarget;
-                          window.setTimeout(() => captureSelection(container), 0);
+                          window.setTimeout(
+                            () => captureSelection(container, block.sequence, pair.sourceStart),
+                            0,
+                          );
                         }}
                       >
                         <HighlightedEnglish
@@ -324,7 +404,9 @@ export function AnnotatedTranscript({
         </div>
 
         <aside
-          className={`expression-comment-panel ${selectedExpression || registrationDraft ? "is-open" : ""}`}
+          className={`expression-comment-panel ${
+            selectedExpression || registrationDraft || editDraft ? "is-open" : ""
+          }`}
           id="expression-comment-panel"
           aria-live="polite"
           style={{ "--expression-comment-top": `${commentTop}px` } as CSSProperties}
@@ -400,19 +482,83 @@ export function AnnotatedTranscript({
               </div>
             </form>
           ) : null}
+
+          {editDraft ? (
+            <form
+              className="expression-comment-card expression-registration-card transcript-selection-edit-card"
+              onSubmit={saveTranscriptSelectionEdit}
+            >
+              <div className="expression-comment-meta">
+                <span>EDIT TRANSCRIPT</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditDraft(null);
+                    setEditError("");
+                  }}
+                  aria-label="英語字幕の編集を閉じる"
+                >
+                  ×
+                </button>
+              </div>
+              <div>
+                <small>選択した英語</small>
+                <h3 lang="en">{editDraft.originalText}</h3>
+              </div>
+              {editError ? (
+                <p className="field-error" role="alert">
+                  {editError}
+                </p>
+              ) : null}
+              <label>
+                <span>修正後の英語</span>
+                <textarea
+                  value={editDraft.replacementText}
+                  onChange={(event) =>
+                    setEditDraft((current) =>
+                      current ? { ...current, replacementText: event.target.value } : null,
+                    )
+                  }
+                  maxLength={1000}
+                  rows={3}
+                  required
+                  spellCheck
+                />
+              </label>
+              <p className="transcript-selection-edit-note">
+                要約と日本語訳はそのまま残ります。意味が変わる修正の場合は、保存後に翻訳を作り直してください。
+              </p>
+              <div className="expression-registration-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setEditDraft(null)}
+                  disabled={savingEdit}
+                >
+                  キャンセル
+                </button>
+                <button className="button button-primary" type="submit" disabled={savingEdit}>
+                  {savingEdit ? "保存しています…" : "選択部分を保存"}
+                </button>
+              </div>
+            </form>
+          ) : null}
         </aside>
       </div>
 
       {selectionCandidate ? (
-        <button
-          className="selection-expression-action"
-          type="button"
+        <div
+          className="selection-text-actions"
           style={{ left: selectionCandidate.toolbarLeft, top: selectionCandidate.toolbarTop }}
           onPointerDown={(event) => event.preventDefault()}
-          onClick={beginExpressionRegistration}
         >
-          ＋ 重要表現に追加
-        </button>
+          <button type="button" onClick={beginExpressionRegistration}>
+            ＋ 重要表現に追加
+          </button>
+          <button type="button" onClick={beginTranscriptSelectionEdit}>
+            ✎ 選択部分を編集
+          </button>
+        </div>
       ) : null}
     </section>
   );
@@ -549,6 +695,29 @@ function snapshotSelection(selection: Selection | null): SelectionSnapshot | nul
     anchorOffset: selection.anchorOffset,
     focusNode: selection.focusNode,
     focusOffset: selection.focusOffset,
+  };
+}
+
+function selectionOffsetsWithin(
+  container: HTMLElement,
+  selectedRange: Range,
+): { start: number; end: number } | null {
+  if (
+    !container.contains(selectedRange.startContainer) ||
+    !container.contains(selectedRange.endContainer)
+  ) {
+    return null;
+  }
+
+  const rangeBeforeStart = document.createRange();
+  rangeBeforeStart.selectNodeContents(container);
+  rangeBeforeStart.setEnd(selectedRange.startContainer, selectedRange.startOffset);
+  const rangeBeforeEnd = document.createRange();
+  rangeBeforeEnd.selectNodeContents(container);
+  rangeBeforeEnd.setEnd(selectedRange.endContainer, selectedRange.endOffset);
+  return {
+    start: rangeBeforeStart.toString().length,
+    end: rangeBeforeEnd.toString().length,
   };
 }
 
