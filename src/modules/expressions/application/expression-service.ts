@@ -1,6 +1,10 @@
 import { getCurrentActorId } from "@/modules/auth/application/current-actor";
 
-import { type ExpressionInput, expressionInputSchema } from "../domain/expression";
+import {
+  type ExpressionInput,
+  expressionIdSchema,
+  expressionInputSchema,
+} from "../domain/expression";
 import {
   archiveExpressionRecord,
   findExpressionForUser,
@@ -14,7 +18,9 @@ export async function listExpressions() {
 }
 
 export async function getExpression(expressionId: string) {
-  return findExpressionForUser(getCurrentActorId(), expressionId);
+  const parsedExpressionId = expressionIdSchema.safeParse(expressionId);
+  if (!parsedExpressionId.success) return null;
+  return findExpressionForUser(getCurrentActorId(), parsedExpressionId.data);
 }
 
 export async function createExpression(input: ExpressionInput) {
@@ -24,11 +30,11 @@ export async function createExpression(input: ExpressionInput) {
 export async function updateExpression(expressionId: string, input: ExpressionInput) {
   return updateExpressionRecord(
     getCurrentActorId(),
-    expressionId,
+    expressionIdSchema.parse(expressionId),
     expressionInputSchema.parse(input),
   );
 }
 
 export async function archiveExpression(expressionId: string) {
-  return archiveExpressionRecord(getCurrentActorId(), expressionId);
+  return archiveExpressionRecord(getCurrentActorId(), expressionIdSchema.parse(expressionId));
 }
