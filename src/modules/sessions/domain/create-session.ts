@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const MAX_LINKED_EXPRESSIONS = 100;
+// Session creation can issue up to two D1 statements per linked expression.
+// Twenty keeps the complete request below the Workers Free limit of 50 D1 queries.
+export const MAX_LINKED_EXPRESSIONS = 20;
 
 export const linkedExpressionSchema = z.object({
   expressionEn: z.string().trim().min(1).max(1000),

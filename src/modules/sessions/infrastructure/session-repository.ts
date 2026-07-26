@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 
 import { getDb } from "@/db/client";
 import { expressions, generatedPrompts, sessionExpressions, sessions } from "@/db/schema";
@@ -13,37 +14,50 @@ export async function insertSessionWithPreparation(
   prompts: RenderedPromptSet,
 ): Promise<string> {
   const db = getDb();
-  return db.transaction(async (transaction) => {
-    const [createdSession] = await transaction
-      .insert(sessions)
-      .values({
-        userId: actorUserId,
-        title: input.title,
-        topic: input.topic,
-        objective: input.objective,
-      })
-      .returning({ id: sessions.id });
-
-    if (!createdSession) {
-      throw new Error("Failed to create session");
-    }
-
-    for (const [sequence, expression] of input.linkedExpressions.entries()) {
-      const normalizedExpressionEn = normalizeExpression(expression.expressionEn);
-      const [existingExpression] = await transaction
-        .select({ id: expressions.id, learningStatus: expressions.learningStatus })
+  const normalizedExpressions = input.linkedExpressions.map((expression) =>
+    normalizeExpression(expression.expressionEn),
+  );
+  const existingExpressions = normalizedExpressions.length
+    ? await db
+        .select({
+          id: expressions.id,
+          normalizedExpressionEn: expressions.normalizedExpressionEn,
+          learningStatus: expressions.learningStatus,
+        })
         .from(expressions)
         .where(
           and(
             eq(expressions.userId, actorUserId),
-            eq(expressions.normalizedExpressionEn, normalizedExpressionEn),
+            inArray(expressions.normalizedExpressionEn, normalizedExpressions),
           ),
         )
-        .limit(1);
+    : [];
+  const existingExpressionByNormalizedValue = new Map(
+    existingExpressions.map((expression) => [expression.normalizedExpressionEn, expression]),
+  );
+  const sessionId = crypto.randomUUID();
+  const statements: BatchItem<"sqlite">[] = [
+    db.insert(sessions).values({
+      id: sessionId,
+      userId: actorUserId,
+      title: input.title,
+      topic: input.topic,
+      objective: input.objective,
+    }),
+  ];
 
-      let libraryExpression = existingExpression;
-      if (existingExpression?.learningStatus === "archived") {
-        [libraryExpression] = await transaction
+  for (const [sequence, expression] of input.linkedExpressions.entries()) {
+    const normalizedExpressionEn = normalizedExpressions[sequence];
+    if (!normalizedExpressionEn) {
+      throw new Error("Failed to normalize linked expression");
+    }
+
+    const existingExpression = existingExpressionByNormalizedValue.get(normalizedExpressionEn);
+    const expressionId = existingExpression?.id ?? crypto.randomUUID();
+
+    if (existingExpression?.learningStatus === "archived") {
+      statements.push(
+        db
           .update(expressions)
           .set({
             expressionEn: expression.expressionEn,
@@ -52,36 +66,35 @@ export async function insertSessionWithPreparation(
             learningStatus: "new",
             updatedAt: new Date(),
           })
-          .where(eq(expressions.id, existingExpression.id))
-          .returning({ id: expressions.id, learningStatus: expressions.learningStatus });
-      } else if (!existingExpression) {
-        [libraryExpression] = await transaction
-          .insert(expressions)
-          .values({
-            userId: actorUserId,
-            expressionEn: expression.expressionEn,
-            normalizedExpressionEn,
-            meaningJa: expression.meaningJa,
-          })
-          .returning({ id: expressions.id, learningStatus: expressions.learningStatus });
-      }
+          .where(eq(expressions.id, existingExpression.id)),
+      );
+    } else if (!existingExpression) {
+      statements.push(
+        db.insert(expressions).values({
+          id: expressionId,
+          userId: actorUserId,
+          expressionEn: expression.expressionEn,
+          normalizedExpressionEn,
+          meaningJa: expression.meaningJa,
+        }),
+      );
+    }
 
-      if (!libraryExpression) {
-        throw new Error("Failed to create linked expression");
-      }
-
-      await transaction.insert(sessionExpressions).values({
-        sessionId: createdSession.id,
-        expressionId: libraryExpression.id,
+    statements.push(
+      db.insert(sessionExpressions).values({
+        sessionId,
+        expressionId,
         expressionEnSnapshot: expression.expressionEn,
         meaningJaSnapshot: expression.meaningJa,
         sequence,
-      });
-    }
+      }),
+    );
+  }
 
-    await transaction.insert(generatedPrompts).values([
+  statements.push(
+    db.insert(generatedPrompts).values([
       {
-        sessionId: createdSession.id,
+        sessionId,
         promptType: "conversation_start",
         templateKey: prompts.templateKey,
         templateVersion: prompts.templateVersion,
@@ -89,7 +102,7 @@ export async function insertSessionWithPreparation(
         renderedContent: prompts.start,
       },
       {
-        sessionId: createdSession.id,
+        sessionId,
         promptType: "review_output",
         templateKey: prompts.templateKey,
         templateVersion: prompts.templateVersion,
@@ -97,10 +110,11 @@ export async function insertSessionWithPreparation(
         inputSnapshot: prompts.inputSnapshot,
         renderedContent: prompts.review,
       },
-    ]);
+    ]),
+  );
 
-    return createdSession.id;
-  });
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+  return sessionId;
 }
 
 export async function findSessionsForUser(actorUserId: string) {
@@ -180,54 +194,53 @@ export async function linkExpressionRecord(
   expressionId: string,
 ) {
   const db = getDb();
-  return db.transaction(async (transaction) => {
-    const [[ownedSession], [ownedExpression]] = await Promise.all([
-      transaction
-        .select({ id: sessions.id })
-        .from(sessions)
-        .where(and(eq(sessions.id, sessionId), eq(sessions.userId, actorUserId)))
-        .limit(1),
-      transaction
-        .select({
-          id: expressions.id,
-          expressionEn: expressions.expressionEn,
-          meaningJa: expressions.meaningJa,
-        })
-        .from(expressions)
-        .where(
-          and(
-            eq(expressions.id, expressionId),
-            eq(expressions.userId, actorUserId),
-            ne(expressions.learningStatus, "archived"),
-          ),
-        )
-        .limit(1),
-    ]);
-
-    if (!ownedSession || !ownedExpression) {
-      return false;
-    }
-
-    const [lastExpression] = await transaction
-      .select({ sequence: sessionExpressions.sequence })
-      .from(sessionExpressions)
-      .where(eq(sessionExpressions.sessionId, sessionId))
-      .orderBy(desc(sessionExpressions.sequence))
-      .limit(1);
-
-    await transaction
-      .insert(sessionExpressions)
-      .values({
-        sessionId,
-        expressionId,
-        expressionEnSnapshot: ownedExpression.expressionEn,
-        meaningJaSnapshot: ownedExpression.meaningJa,
-        sequence: (lastExpression?.sequence ?? -1) + 1,
+  const [[ownedSession], [ownedExpression]] = await Promise.all([
+    db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(eq(sessions.id, sessionId), eq(sessions.userId, actorUserId)))
+      .limit(1),
+    db
+      .select({
+        id: expressions.id,
+        expressionEn: expressions.expressionEn,
+        meaningJa: expressions.meaningJa,
       })
-      .onConflictDoNothing();
+      .from(expressions)
+      .where(
+        and(
+          eq(expressions.id, expressionId),
+          eq(expressions.userId, actorUserId),
+          ne(expressions.learningStatus, "archived"),
+        ),
+      )
+      .limit(1),
+  ]);
 
-    return true;
-  });
+  if (!ownedSession || !ownedExpression) {
+    return false;
+  }
+
+  const [lastExpression] = await db
+    .select({ sequence: sessionExpressions.sequence })
+    .from(sessionExpressions)
+    .where(eq(sessionExpressions.sessionId, sessionId))
+    .orderBy(desc(sessionExpressions.sequence))
+    .limit(1);
+
+  const [linkedExpression] = await db
+    .insert(sessionExpressions)
+    .values({
+      sessionId,
+      expressionId,
+      expressionEnSnapshot: ownedExpression.expressionEn,
+      meaningJaSnapshot: ownedExpression.meaningJa,
+      sequence: (lastExpression?.sequence ?? -1) + 1,
+    })
+    .onConflictDoNothing()
+    .returning({ id: sessionExpressions.id });
+
+  return Boolean(linkedExpression);
 }
 
 export async function unlinkExpressionRecord(
