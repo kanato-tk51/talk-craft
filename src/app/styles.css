@@ -1322,9 +1322,34 @@ code {
 @media (max-width: 850px) {
   .header-inner {
     grid-template-columns: 1fr auto;
+    padding-top: 10px;
+  }
+  .header-inner .brand {
+    grid-column: 1;
+    grid-row: 1;
   }
   .header-inner nav {
-    display: none;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+    gap: 0;
+    width: 100%;
+    margin-top: 8px;
+    overflow-x: auto;
+    border-top: 1px solid rgb(23 33 29 / 10%);
+    font-size: 0.82rem;
+  }
+  .header-inner nav a {
+    display: grid;
+    min-height: 44px;
+    padding: 8px 10px;
+    place-items: center;
+    white-space: nowrap;
+  }
+  .header-inner .header-action {
+    grid-column: 2;
+    grid-row: 1;
   }
   .session-facts {
     grid-template-columns: repeat(3, 1fr);
@@ -1384,13 +1409,7 @@ code {
   }
   .header-inner {
     min-height: 62px;
-  }
-  .header-action {
-    font-size: 0;
-  }
-  .header-action::after {
-    content: "＋ 作成";
-    font-size: 0.78rem;
+    padding-top: 8px;
   }
   .page-shell {
     padding: 45px 0 85px;
