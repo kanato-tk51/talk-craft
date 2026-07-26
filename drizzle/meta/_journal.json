@@ -1,61 +1,12 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1784012448443,
-      "tag": "0000_living_rogue",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1784012688936,
-      "tag": "0001_dry_silverclaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1784120676098,
-      "tag": "0002_hot_harpoon",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1784122463248,
-      "tag": "0003_colorful_purifiers",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1784124971022,
-      "tag": "0004_flawless_emma_frost",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1784129185992,
-      "tag": "0005_sharp_absorbing_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1784159820627,
-      "tag": "0006_cynical_cannonball",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1785027553696,
-      "tag": "0007_faithful_kinsey_walden",
+      "version": "6",
+      "when": 1785041231999,
+      "tag": "0000_broken_red_shift",
       "breakpoints": true
     }
   ]

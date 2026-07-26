@@ -1,57 +1,41 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  check,
-  index,
-  integer,
-  jsonb,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import { sessions } from "./sessions";
 import { users } from "./users";
 
-export const learningStatusEnum = pgEnum("learning_status", [
-  "new",
-  "practicing",
-  "active",
-  "mastered",
-  "archived",
-]);
+const learningStatuses = ["new", "practicing", "active", "mastered", "archived"] as const;
 
-export const priorityEnum = pgEnum("priority", ["high", "medium", "low"]);
+const priorities = ["high", "medium", "low"] as const;
 
-export const usageStatusEnum = pgEnum("usage_status", ["used", "not_used", "unknown"]);
+const usageStatuses = ["used", "not_used", "unknown"] as const;
 
-export const expressions = pgTable(
+export const expressions = sqliteTable(
   "expressions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     meaningJa: text("meaning_ja").notNull().default(""),
     expressionEn: text("expression_en").notNull(),
     normalizedExpressionEn: text("normalized_expression_en").notNull(),
-    alternativeExpressions: jsonb("alternative_expressions")
+    alternativeExpressions: text("alternative_expressions", { mode: "json" })
       .$type<string[]>()
       .notNull()
       .default([]),
-    examples: jsonb("examples").$type<string[]>().notNull().default([]),
-    relatedWords: jsonb("related_words").$type<string[]>().notNull().default([]),
+    examples: text("examples", { mode: "json" }).$type<string[]>().notNull().default([]),
+    relatedWords: text("related_words", { mode: "json" }).$type<string[]>().notNull().default([]),
     usageNotes: text("usage_notes").notNull().default(""),
     pronunciationNotes: text("pronunciation_notes").notNull().default(""),
-    learningStatus: learningStatusEnum("learning_status").notNull().default("new"),
-    priority: priorityEnum("priority").notNull().default("medium"),
-    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
-    nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    learningStatus: text("learning_status", { enum: learningStatuses }).notNull().default("new"),
+    priority: text("priority", { enum: priorities }).notNull().default("medium"),
+    lastReviewedAt: integer("last_reviewed_at", { mode: "timestamp_ms" }),
+    nextReviewAt: integer("next_review_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("expressions_user_normalized_unique").on(
@@ -59,29 +43,36 @@ export const expressions = pgTable(
       table.normalizedExpressionEn,
     ),
     index("expressions_user_updated_at_idx").on(table.userId, table.updatedAt),
+    check(
+      "expressions_learning_status_check",
+      sql`${table.learningStatus} in ('new', 'practicing', 'active', 'mastered', 'archived')`,
+    ),
+    check("expressions_priority_check", sql`${table.priority} in ('high', 'medium', 'low')`),
   ],
 );
 
-export const sessionExpressions = pgTable(
+export const sessionExpressions = sqliteTable(
   "session_expressions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sessionId: uuid("session_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
-    expressionId: uuid("expression_id")
+    expressionId: text("expression_id")
       .notNull()
       .references(() => expressions.id, { onDelete: "restrict" }),
     expressionEnSnapshot: text("expression_en_snapshot").notNull(),
     meaningJaSnapshot: text("meaning_ja_snapshot").notNull().default(""),
-    plannedToUse: boolean("planned_to_use").notNull().default(true),
-    usageStatus: usageStatusEnum("usage_status").notNull().default("unknown"),
+    plannedToUse: integer("planned_to_use", { mode: "boolean" }).notNull().default(true),
+    usageStatus: text("usage_status", { enum: usageStatuses }).notNull().default("unknown"),
     usageEvaluation: text("usage_evaluation").notNull().default(""),
     feedback: text("feedback").notNull().default(""),
-    carryOverToNext: boolean("carry_over_to_next").notNull().default(false),
+    carryOverToNext: integer("carry_over_to_next", { mode: "boolean" }).notNull().default(false),
     sequence: integer("sequence").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("session_expressions_session_expression_unique").on(
@@ -90,5 +81,9 @@ export const sessionExpressions = pgTable(
     ),
     uniqueIndex("session_expressions_session_sequence_unique").on(table.sessionId, table.sequence),
     check("session_expressions_sequence_check", sql`${table.sequence} >= 0`),
+    check(
+      "session_expressions_usage_status_check",
+      sql`${table.usageStatus} in ('used', 'not_used', 'unknown')`,
+    ),
   ],
 );

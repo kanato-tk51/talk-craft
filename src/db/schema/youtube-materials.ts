@@ -1,14 +1,4 @@
-import {
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 import {
   type KeyExpression,
@@ -20,41 +10,46 @@ import {
 
 import { users } from "./users";
 
-export const youtubeMaterials = pgTable(
+export const youtubeMaterials = sqliteTable(
   "youtube_materials",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    youtubeVideoId: varchar("youtube_video_id", { length: 20 }).notNull(),
+    youtubeVideoId: text("youtube_video_id").notNull(),
     sourceUrl: text("source_url").notNull(),
     title: text("title").notNull(),
     channelName: text("channel_name").notNull().default(""),
     thumbnailUrl: text("thumbnail_url").notNull(),
-    captionLanguageCode: varchar("caption_language_code", { length: 20 }).notNull(),
+    captionLanguageCode: text("caption_language_code").notNull(),
     captionTrackName: text("caption_track_name").notNull().default(""),
-    captionSource: varchar("caption_source", { length: 20 })
+    captionSource: text("caption_source")
       .$type<YoutubeCaptionSource>()
       .notNull()
       .default("creator"),
     transcriptText: text("transcript_text").notNull(),
-    transcriptBlocks: jsonb("transcript_blocks").$type<TranscriptBlock[]>().notNull(),
+    transcriptBlocks: text("transcript_blocks", { mode: "json" })
+      .$type<TranscriptBlock[]>()
+      .notNull(),
     translationPrompt: text("translation_prompt").notNull(),
-    promptVersion: varchar("prompt_version", { length: 20 })
-      .notNull()
-      .default(TRANSLATION_PROMPT_VERSION),
+    promptVersion: text("prompt_version").notNull().default(TRANSLATION_PROMPT_VERSION),
     summaryJa: text("summary_ja").notNull().default(""),
-    translationBlocks: jsonb("translation_blocks")
+    translationBlocks: text("translation_blocks", { mode: "json" })
       .$type<TranslationBlock[]>()
       .notNull()
       .default([]),
-    keyExpressions: jsonb("key_expressions").$type<KeyExpression[]>().notNull().default([]),
+    keyExpressions: text("key_expressions", { mode: "json" })
+      .$type<KeyExpression[]>()
+      .notNull()
+      .default([]),
     rawAiResponse: text("raw_ai_response").notNull().default(""),
     version: integer("version").notNull().default(1),
-    translatedAt: timestamp("translated_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    translatedAt: integer("translated_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("youtube_materials_user_video_unique").on(table.userId, table.youtubeVideoId),
