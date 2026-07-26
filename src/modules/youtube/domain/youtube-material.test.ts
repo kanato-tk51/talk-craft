@@ -10,6 +10,7 @@ import {
   removeKeyExpression,
   renderTranslationPrompt,
   reviseTranscriptBlocks,
+  reviseTranscriptSelection,
   type TranscriptBlock,
   TranscriptEditError,
   TranslationResponseError,
@@ -82,6 +83,40 @@ describe("reviseTranscriptBlocks", () => {
         ]),
       ),
     ).toThrow("2番目の英語字幕を入力してください");
+  });
+});
+
+describe("reviseTranscriptSelection", () => {
+  const blocks: TranscriptBlock[] = [
+    { sequence: 1, startMs: 0, text: "It is never to late to start." },
+    { sequence: 2, startMs: 5_000, text: "Keep learning." },
+  ];
+
+  it("replaces only the selected range and preserves other block data", () => {
+    expect(
+      reviseTranscriptSelection(blocks, {
+        blockSequence: 1,
+        sourceStart: 12,
+        sourceEnd: 19,
+        originalText: "to late",
+        replacementText: "too late",
+      }),
+    ).toEqual([
+      { sequence: 1, startMs: 0, text: "It is never too late to start." },
+      { sequence: 2, startMs: 5_000, text: "Keep learning." },
+    ]);
+  });
+
+  it("rejects a stale selection instead of replacing a different range", () => {
+    expect(() =>
+      reviseTranscriptSelection(blocks, {
+        blockSequence: 1,
+        sourceStart: 12,
+        sourceEnd: 19,
+        originalText: "too late",
+        replacementText: "much too late",
+      }),
+    ).toThrow("字幕が更新されています");
   });
 });
 

@@ -171,6 +171,44 @@ export async function updateYoutubeMaterialTranscript(
   return Boolean(updated);
 }
 
+export async function updateYoutubeMaterialTranscriptSelection(
+  actorUserId: string,
+  materialId: string,
+  expectedVersion: number,
+  input: {
+    transcriptBlocks: TranscriptBlock[];
+    transcriptText: string;
+    translationPrompt: string;
+    translationBlocks: TranslationBlock[];
+    keyExpressions: KeyExpression[];
+  },
+) {
+  const db = getDb();
+  const [updated] = await db
+    .update(youtubeMaterials)
+    .set({
+      transcriptBlocks: input.transcriptBlocks,
+      transcriptText: input.transcriptText,
+      translationPrompt: input.translationPrompt,
+      promptVersion: TRANSLATION_PROMPT_VERSION,
+      translationBlocks: input.translationBlocks,
+      keyExpressions: input.keyExpressions,
+      rawAiResponse: "",
+      updatedAt: new Date(),
+      version: expectedVersion + 1,
+    })
+    .where(
+      and(
+        eq(youtubeMaterials.id, materialId),
+        eq(youtubeMaterials.userId, actorUserId),
+        eq(youtubeMaterials.version, expectedVersion),
+      ),
+    )
+    .returning({ id: youtubeMaterials.id });
+
+  return Boolean(updated);
+}
+
 export async function updateYoutubeMaterialKeyExpressions(
   actorUserId: string,
   materialId: string,

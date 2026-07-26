@@ -124,6 +124,20 @@ export const userKeyExpressionInputSchema = z.object({
 
 export type UserKeyExpressionInput = z.infer<typeof userKeyExpressionInputSchema>;
 
+export const transcriptSelectionEditInputSchema = z
+  .object({
+    blockSequence: z.number().int().positive(),
+    sourceStart: z.number().int().nonnegative().max(MAX_TRANSCRIPT_CHARACTERS),
+    sourceEnd: z.number().int().positive().max(MAX_TRANSCRIPT_CHARACTERS),
+    originalText: z.string().min(1).max(1_000),
+    replacementText: z.string().trim().min(1, "修正後の英語を入力してください。").max(1_000),
+  })
+  .refine((input) => input.sourceEnd > input.sourceStart, {
+    message: "編集する英語の範囲を選択してください。",
+  });
+
+export type TranscriptSelectionEditInput = z.infer<typeof transcriptSelectionEditInputSchema>;
+
 export function removeKeyExpression(
   keyExpressions: KeyExpression[],
   expressionEn: string,
@@ -284,6 +298,44 @@ export function reviseTranscriptBlocks(
     return { ...block, text };
   });
 
+  return revisedBlocks;
+}
+
+export function reviseTranscriptSelection(
+  blocks: TranscriptBlock[],
+  input: TranscriptSelectionEditInput,
+): TranscriptBlock[] {
+  const targetBlock = blocks.find((block) => block.sequence === input.blockSequence);
+  if (!targetBlock) {
+    throw new TranscriptEditError(
+      "編集する字幕が見つかりません。画面を再読み込みしてから選択し直してください。",
+    );
+  }
+  if (
+    input.sourceEnd > targetBlock.text.length ||
+    targetBlock.text.slice(input.sourceStart, input.sourceEnd) !== input.originalText
+  ) {
+    throw new TranscriptEditError(
+      "字幕が更新されています。画面を再読み込みしてから選択し直してください。",
+    );
+  }
+
+  const replacementText = normalizeCaptionText(input.replacementText);
+  if (!replacementText) {
+    throw new TranscriptEditError("修正後の英語を入力してください。");
+  }
+
+  const revisedBlocks = blocks.map((block) =>
+    block.sequence === input.blockSequence
+      ? {
+          ...block,
+          text: `${block.text.slice(0, input.sourceStart)}${replacementText}${block.text.slice(input.sourceEnd)}`,
+        }
+      : block,
+  );
+  if (buildTranscriptText(revisedBlocks).length > MAX_TRANSCRIPT_CHARACTERS) {
+    throw new TranscriptEditError("字幕が長すぎます。現在は約20万文字まで対応しています。");
+  }
   return revisedBlocks;
 }
 

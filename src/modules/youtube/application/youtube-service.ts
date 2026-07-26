@@ -9,6 +9,9 @@ import {
   removeKeyExpression,
   renderTranslationPrompt,
   reviseTranscriptBlocks,
+  reviseTranscriptSelection,
+  type TranscriptBlock,
+  type TranscriptSelectionEditInput,
   type UserKeyExpressionInput,
   userKeyExpressionInputSchema,
   type YoutubeTranscriptSource,
@@ -21,6 +24,7 @@ import {
   insertYoutubeMaterial,
   updateYoutubeMaterialKeyExpressions,
   updateYoutubeMaterialTranscript,
+  updateYoutubeMaterialTranscriptSelection,
   updateYoutubeMaterialTranslation,
 } from "../infrastructure/youtube-material-repository";
 
@@ -149,6 +153,61 @@ export async function updateYoutubeTranscript(
     transcriptBlocks,
     transcriptText,
     translationPrompt,
+  });
+}
+
+export async function editYoutubeTranscriptSelection(
+  materialId: string,
+  input: TranscriptSelectionEditInput,
+) {
+  const actorUserId = await getCurrentActorId();
+  const material = await findYoutubeMaterialForUser(actorUserId, materialId);
+  if (!material) {
+    return false;
+  }
+
+  const usesAiParagraphs =
+    material.translationBlocks.length > 0 &&
+    material.translationBlocks.every((block) => block.sourceEn);
+  const displayBlocks: TranscriptBlock[] = usesAiParagraphs
+    ? material.translationBlocks.map((block) => ({
+        sequence: block.sequence,
+        startMs: block.startMs ?? material.transcriptBlocks[0]?.startMs ?? 0,
+        text: block.sourceEn ?? "",
+      }))
+    : material.transcriptBlocks;
+  const transcriptBlocks = reviseTranscriptSelection(displayBlocks, input);
+  const revisedTextBySequence = new Map(
+    transcriptBlocks.map((block) => [block.sequence, block.text]),
+  );
+  const translationBlocks = usesAiParagraphs
+    ? material.translationBlocks.map((block) =>
+        block.sequence === input.blockSequence
+          ? {
+              ...block,
+              sourceEn: revisedTextBySequence.get(block.sequence) ?? block.sourceEn,
+              sentencePairs: undefined,
+            }
+          : block,
+      )
+    : material.translationBlocks;
+  const transcriptText = buildTranscriptText(transcriptBlocks);
+  const translationPrompt = renderTranslationPrompt({
+    title: material.title,
+    channelName: material.channelName,
+    captionSource: material.captionSource,
+    blocks: transcriptBlocks,
+  });
+  const keyExpressions = material.keyExpressions.filter(
+    (expression) => findExpressionRanges(transcriptText, [expression]).length,
+  );
+
+  return updateYoutubeMaterialTranscriptSelection(actorUserId, materialId, material.version, {
+    transcriptBlocks,
+    transcriptText,
+    translationPrompt,
+    translationBlocks,
+    keyExpressions,
   });
 }
 
