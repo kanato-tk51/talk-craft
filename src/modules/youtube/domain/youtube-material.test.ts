@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildTranscriptBlocks,
   extractYouTubeVideoId,
+  type KeyExpression,
   parseTranslationResponse,
+  removeKeyExpression,
   renderTranslationPrompt,
   type TranscriptBlock,
   TranslationResponseError,
@@ -268,5 +270,40 @@ describe("translation prompt and response", () => {
     expect(parseTranslationResponse(JSON.stringify(response), blocks).keyExpressions).toHaveLength(
       1,
     );
+  });
+});
+
+describe("removeKeyExpression", () => {
+  const aiExpression: KeyExpression = {
+    expressionEn: "work it out",
+    meaningJa: "解決する",
+    explanationJa: "",
+    exampleEn: "",
+    exampleJa: "",
+    origin: "ai",
+  };
+  const userExpression: KeyExpression = {
+    expressionEn: "Think   it through",
+    meaningJa: "よく考える",
+    explanationJa: "",
+    exampleEn: "",
+    exampleJa: "",
+    origin: "user",
+  };
+
+  it("removes a user-added expression using normalized text", () => {
+    expect(removeKeyExpression([aiExpression, userExpression], " think it THROUGH ")).toEqual([
+      aiExpression,
+    ]);
+  });
+
+  it("removes an AI-generated expression", () => {
+    expect(removeKeyExpression([aiExpression, userExpression], "work it out")).toEqual([
+      userExpression,
+    ]);
+  });
+
+  it("returns null when the expression does not exist", () => {
+    expect(removeKeyExpression([aiExpression], "not registered")).toBeNull();
   });
 });

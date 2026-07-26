@@ -110,6 +110,18 @@ export const userKeyExpressionInputSchema = z.object({
 
 export type UserKeyExpressionInput = z.infer<typeof userKeyExpressionInputSchema>;
 
+export function removeKeyExpression(
+  keyExpressions: KeyExpression[],
+  expressionEn: string,
+): KeyExpression[] | null {
+  const normalizedTarget = normalizeKeyExpressionText(expressionEn);
+  const expressionIndex = keyExpressions.findIndex(
+    (expression) => normalizeKeyExpressionText(expression.expressionEn) === normalizedTarget,
+  );
+  if (expressionIndex < 0) return null;
+  return keyExpressions.filter((_, index) => index !== expressionIndex);
+}
+
 export type ParsedTranslationResponse = {
   summaryJa: string;
   translationBlocks: TranslationBlock[];
@@ -441,6 +453,10 @@ function normalizeAiKeyExpressions(items: z.infer<typeof keyExpressionSchema>[])
       exampleJa: item.example_ja,
       origin: "ai" as const,
     }));
+}
+
+function normalizeKeyExpressionText(value: string): string {
+  return value.trim().replaceAll(/\s+/g, " ").toLocaleLowerCase("en-US");
 }
 
 function paragraphStartTimes(
