@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { expressionInputSchema, normalizeExpression } from "./expression";
+import { expressionIdSchema, expressionInputSchema, normalizeExpression } from "./expression";
+
+describe("expressionIdSchema", () => {
+  it("accepts UUIDs and rejects SQL-like input", () => {
+    expect(expressionIdSchema.safeParse("00000000-0000-4000-8000-000000000001").success).toBe(true);
+    expect(expressionIdSchema.safeParse("' OR 1=1; DROP TABLE expressions; --").success).toBe(
+      false,
+    );
+  });
+});
 
 describe("expressionInputSchema", () => {
   it("accepts independent flashcard-ready expression data", () => {
